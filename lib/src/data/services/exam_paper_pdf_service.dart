@@ -66,7 +66,7 @@ class ExamPaperPdfService {
         ? PdfPageFormat(260 * PdfPageFormat.mm, 368 * PdfPageFormat.mm)
         : PdfPageFormat(184 * PdfPageFormat.mm, 260 * PdfPageFormat.mm);
     final baseFontSize = isEightK ? 12.5 : 11.0;
-    final margins = PdfPageFormat(
+    final margins = pw.EdgeInsets.fromLTRB(
       isEightK ? 18 * PdfPageFormat.mm : 14 * PdfPageFormat.mm,
       isEightK ? 20 * PdfPageFormat.mm : 16 * PdfPageFormat.mm,
       isEightK ? 18 * PdfPageFormat.mm : 14 * PdfPageFormat.mm,

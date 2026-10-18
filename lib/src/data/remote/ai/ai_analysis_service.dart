@@ -711,6 +711,8 @@ class AiAnalysisService {
                 ? 'high'
                 : 'auto',
             jsonResponse: true,
+            // flash 档关思考：速度 5 倍且输出全部用于 JSON，稳定性优先。
+            disableThinking: true,
           );
           final analysis = _parseAnalysisResponse(content);
           return _ensureAnalysisConsistency(
@@ -746,6 +748,7 @@ class AiAnalysisService {
             maxTokens: 2200,
             imageDetail: 'auto',
             jsonResponse: true,
+            disableThinking: true,
           );
           final analysis = _parseAnalysisResponse(content);
           return _ensureAnalysisConsistency(
@@ -781,6 +784,7 @@ class AiAnalysisService {
           prompt: prompt,
           maxTokens: isCompositeLanguageAnalysis ? 3000 : 2000,
           jsonResponse: true,
+          disableThinking: true,
         );
       } on DioException catch (e) {
         if (!_shouldRetryTextAnalysisWithCompact(e)) rethrow;
@@ -793,6 +797,7 @@ class AiAnalysisService {
           maxTokens: 1800,
           temperature: 0.2,
           jsonResponse: true,
+          disableThinking: true,
         );
       }
       final analysis = _parseAnalysisResponse(content);
@@ -2052,6 +2057,12 @@ class AiAnalysisService {
     return requested < 16384 ? 16384 : requested;
   }
 
+  /// 关思考后的输出预算下限：无思考消耗，但解析 JSON/图形描述
+  /// 本身可能较长，2000 之类的小预算会截断。
+  int _noThinkingSafeMaxTokens(int requested) {
+    return requested < 4096 ? 4096 : requested;
+  }
+
   Future<String> _requestAiContent({
     required AiProviderConfig config,
     required String systemPrompt,
@@ -2069,8 +2080,9 @@ class AiAnalysisService {
         <String, String>{'role': 'user', 'content': prompt},
       ],
       'temperature': temperature,
-      'max_tokens':
-          disableThinking ? maxTokens : _reasoningSafeMaxTokens(config, maxTokens),
+      'max_tokens': disableThinking
+          ? _noThinkingSafeMaxTokens(maxTokens)
+          : _reasoningSafeMaxTokens(config, maxTokens),
     };
     final thinking =
         _thinkingParameter(config, disableThinking: disableThinking);
@@ -2113,7 +2125,7 @@ class AiAnalysisService {
     final baseUrl = config.effectiveBaseUrl.toLowerCase();
     final model = config.model.toLowerCase();
     final effectiveMaxTokens = disableThinking
-        ? maxTokens
+        ? _noThinkingSafeMaxTokens(maxTokens)
         : _reasoningSafeMaxTokens(config, maxTokens);
 
     Map<String, dynamic> chatBody() {
@@ -2740,6 +2752,7 @@ class AiAnalysisService {
       maxTokens: 1800,
       temperature: 0.2,
       jsonResponse: true,
+      disableThinking: true,
     );
     final analysis = _parseAnalysisResponse(content);
     return _markExtractionFallbackForReview(

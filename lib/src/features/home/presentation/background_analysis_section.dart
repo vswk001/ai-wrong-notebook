@@ -194,9 +194,20 @@ class _TaskTile extends StatelessWidget {
       AnalysisJobStatus.queued => '等待解析',
       AnalysisJobStatus.running => '正在解析',
       AnalysisJobStatus.completed => '解析好了，待确认',
-      AnalysisJobStatus.failed => '解析失败',
+      AnalysisJobStatus.failed => _failedLabel(),
       AnalysisJobStatus.cancelled => '已停止',
     };
+  }
+
+  /// 失败时透出真实原因，便于用户反馈与自助排查。
+  String _failedLabel() {
+    final detail = (task.job.errorMessage ?? '').trim();
+    if (detail.isEmpty) return '解析失败';
+    final singleLine = detail.replaceAll(RegExp(r'\s+'), ' ');
+    final clipped = singleLine.length > 90
+        ? '${singleLine.substring(0, 90)}…'
+        : singleLine;
+    return '解析失败：$clipped';
   }
 
   String _candidateProgressLabel(AnalysisJobProgress progress) {

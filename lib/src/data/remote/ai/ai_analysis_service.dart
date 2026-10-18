@@ -521,6 +521,7 @@ class AiAnalysisService {
         imageDetail: 'auto',
         // 结构化提取是转写任务，思考只会消耗输出预算导致 content 为空。
         disableThinking: true,
+        jsonResponse: true,
       );
       final extraction = _parseExtractionResponse(extractionContent);
 
@@ -709,6 +710,7 @@ class AiAnalysisService {
             imageDetail: isCompositeLanguageAnalysis || shouldAnalyzeImageFirst
                 ? 'high'
                 : 'auto',
+            jsonResponse: true,
           );
           final analysis = _parseAnalysisResponse(content);
           return _ensureAnalysisConsistency(
@@ -743,6 +745,7 @@ class AiAnalysisService {
             imageBytes: imageBytes,
             maxTokens: 2200,
             imageDetail: 'auto',
+            jsonResponse: true,
           );
           final analysis = _parseAnalysisResponse(content);
           return _ensureAnalysisConsistency(
@@ -777,6 +780,7 @@ class AiAnalysisService {
           systemPrompt: systemPrompt,
           prompt: prompt,
           maxTokens: isCompositeLanguageAnalysis ? 3000 : 2000,
+          jsonResponse: true,
         );
       } on DioException catch (e) {
         if (!_shouldRetryTextAnalysisWithCompact(e)) rethrow;
@@ -788,6 +792,7 @@ class AiAnalysisService {
           prompt: _buildCompactAnalysisPrompt(correctedText, subjectName),
           maxTokens: 1800,
           temperature: 0.2,
+          jsonResponse: true,
         );
       }
       final analysis = _parseAnalysisResponse(content);
@@ -840,6 +845,7 @@ class AiAnalysisService {
         maxTokens: 1800,
         temperature: 0.45,
         disableThinking: true,
+        jsonResponse: true,
       );
       final map = _parseResponseJson(content);
       return _parseGeneratedExercises(
@@ -965,6 +971,7 @@ class AiAnalysisService {
               imageDetail: 'high',
               temperature: 0.1,
               disableThinking: true,
+              jsonResponse: true,
             )
           : await _requestAiContent(
               config: config,
@@ -973,6 +980,7 @@ class AiAnalysisService {
               maxTokens: 1000,
               temperature: 0.1,
               disableThinking: true,
+              jsonResponse: true,
             );
       final verification = _parseConsistencyVerificationResponse(content);
       return _applyConsistencyVerification(analysis, verification);
@@ -2051,6 +2059,7 @@ class AiAnalysisService {
     int maxTokens = 2000,
     double temperature = 0.7,
     bool disableThinking = false,
+    bool jsonResponse = false,
   }) async {
     final dio = _createClient(config);
     final body = <String, dynamic>{
@@ -2067,6 +2076,9 @@ class AiAnalysisService {
         _thinkingParameter(config, disableThinking: disableThinking);
     if (thinking != null) {
       body['thinking'] = thinking;
+    }
+    if (jsonResponse && _isBigmodelHost(config)) {
+      body['response_format'] = <String, String>{'type': 'json_object'};
     }
     final response = await _retryPost(dio, '/chat/completions', data: body);
 
@@ -2093,6 +2105,7 @@ class AiAnalysisService {
     String imageDetail = 'auto',
     double temperature = 0.7,
     bool disableThinking = false,
+    bool jsonResponse = false,
   }) async {
     final dio = _createClient(config);
     final base64Image = base64Encode(imageBytes);
@@ -2129,6 +2142,9 @@ class AiAnalysisService {
           _thinkingParameter(config, disableThinking: disableThinking);
       if (thinking != null) {
         body['thinking'] = thinking;
+      }
+      if (jsonResponse && _isBigmodelHost(config)) {
+        body['response_format'] = <String, String>{'type': 'json_object'};
       }
       return body;
     }
@@ -2190,6 +2206,7 @@ class AiAnalysisService {
 - 如果内容包含 LaTeX，必须先生成合法 JSON：所有 LaTeX 反斜杠都写成 JSON 转义形式，例如 \\frac、\\times、\\(x\\)、\\[x\\]
 - 方程组或多行公式必须使用 KaTeX 兼容的 aligned 或 cases 环境，例如 \\begin{cases} x+y=5 \\\\ x-y=1 \\end{cases}，不要使用 \\newline
 - 不要在 JSON 字符串内部直接换行；换行必须写成 \\n
+- JSON 字符串内部禁止出现未转义的英文双引号 "；引用题干中的词语时必须使用中文引号“”，书名使用《》
 - 【LaTeX 格式强制规范——必须严格遵守】
   1. 所有数学公式必须使用标准 LaTeX 定界符包裹：行内公式用 \(公式\)，独立公式用 \[公式\]。禁止使用方括号 [(...) 或 [...] 作为 LaTeX 定界符。
   2. LaTeX 命令必须使用完整的反斜杠前缀，禁止省略反斜杠：
@@ -2242,6 +2259,7 @@ class AiAnalysisService {
 - 如果内容包含 LaTeX，必须先生成合法 JSON：所有 LaTeX 反斜杠都写成 JSON 转义形式，例如 \\frac、\\times、\\(x\\)、\\[x\\]
 - 方程组或多行公式必须使用 KaTeX 兼容的 aligned 或 cases 环境，例如 \\begin{cases} x+y=5 \\\\ x-y=1 \\end{cases}，不要使用 \\newline
 - 不要在 JSON 字符串内部直接换行；换行必须写成 \\n
+- JSON 字符串内部禁止出现未转义的英文双引号 "；引用题干中的词语时必须使用中文引号“”，书名使用《》
 - 【LaTeX 格式强制规范——必须严格遵守】
   1. 所有数学公式必须使用标准 LaTeX 定界符包裹：行内公式用 \(公式\)，独立公式用 \[公式\]。禁止使用方括号 [(...) 或 [...] 作为 LaTeX 定界符。
   2. LaTeX 命令必须使用完整的反斜杠前缀，禁止省略反斜杠：
@@ -2707,6 +2725,7 @@ class AiAnalysisService {
       prompt: _buildCompactAnalysisPrompt(fallbackText, subjectName),
       maxTokens: 1800,
       temperature: 0.2,
+      jsonResponse: true,
     );
     final analysis = _parseAnalysisResponse(content);
     return _markExtractionFallbackForReview(
@@ -2720,33 +2739,83 @@ class AiAnalysisService {
 
     final jsonStr = _stripJsonFence(content);
 
-    try {
-      final map = jsonDecode(jsonStr) as Map<String, dynamic>;
-      debugPrint('[AiAnalysisService] Parsed JSON keys: ${map.keys.toList()}');
-      return _normalizeParsedJsonStrings(map);
-    } catch (e) {
-      final repairedJson = _repairInvalidJsonStringEscapes(jsonStr);
-      if (repairedJson != jsonStr) {
-        try {
-          final map = jsonDecode(repairedJson) as Map<String, dynamic>;
-          debugPrint(
-              '[AiAnalysisService] Parsed repaired JSON keys: ${map.keys.toList()}');
-          return _normalizeParsedJsonStrings(map);
-        } catch (repairedError) {
-          debugPrint(
-              '[AiAnalysisService] Repaired parse error: $repairedError');
-          final recoveredMap = _recoverFlatJsonFields(repairedJson);
-          if (recoveredMap.isNotEmpty) {
-            debugPrint(
-                '[AiAnalysisService] Recovered JSON keys: ${recoveredMap.keys.toList()}');
-            return _normalizeParsedJsonStrings(recoveredMap);
-          }
-        }
+    // 模型偶发生成不合法 JSON：LaTeX 反斜杠未转义、字符串里裸英文引号
+    // （例如 "3. "铺地锦"是…"）、字符串内裸换行。按多种修复组合依次尝试。
+    final baseCandidates = <String>[
+      jsonStr,
+      _repairInvalidJsonStringEscapes(jsonStr),
+      _escapeUnescapedInnerQuotes(jsonStr),
+      _repairInvalidJsonStringEscapes(_escapeUnescapedInnerQuotes(jsonStr)),
+    ];
+    Object? lastError;
+    for (final candidate in baseCandidates) {
+      try {
+        final map = jsonDecode(candidate) as Map<String, dynamic>;
+        debugPrint('[AiAnalysisService] Parsed JSON keys: ${map.keys.toList()}');
+        return _normalizeParsedJsonStrings(map);
+      } catch (e) {
+        lastError = e;
       }
-
-      debugPrint('[AiAnalysisService] Parse error: $e');
-      throw AiAnalysisException('解析 AI 响应失败: $e');
     }
+    for (final candidate in baseCandidates) {
+      final recoveredMap = _recoverFlatJsonFields(candidate);
+      if (recoveredMap.isNotEmpty) {
+        debugPrint(
+            '[AiAnalysisService] Recovered JSON keys: ${recoveredMap.keys.toList()}');
+        return _normalizeParsedJsonStrings(recoveredMap);
+      }
+    }
+
+    debugPrint('[AiAnalysisService] Parse error: $lastError');
+    throw AiAnalysisException('解析 AI 响应失败: $lastError');
+  }
+
+  /// 修复 JSON 字符串值内部未转义的英文双引号。
+  /// 判定：引号后（忽略空格/制表符）紧跟 , } ] : 或行尾/结尾时视为字符串
+  /// 结束；否则视为内容里的裸引号，转义写成 \"。
+  String _escapeUnescapedInnerQuotes(String jsonStr) {
+    final result = StringBuffer();
+    var inString = false;
+    for (var i = 0; i < jsonStr.length; i++) {
+      final char = jsonStr[i];
+      if (!inString) {
+        if (char == '"') inString = true;
+        result.write(char);
+        continue;
+      }
+      if (char == r'\') {
+        result.write(char);
+        if (i + 1 < jsonStr.length) {
+          result.write(jsonStr[i + 1]);
+          i++;
+        }
+        continue;
+      }
+      if (char == '"') {
+        var j = i + 1;
+        while (j < jsonStr.length &&
+            (jsonStr[j] == ' ' || jsonStr[j] == '\t')) {
+          j++;
+        }
+        final next = j < jsonStr.length ? jsonStr[j] : '';
+        final looksLikeTerminator = next.isEmpty ||
+            next == ',' ||
+            next == '}' ||
+            next == ']' ||
+            next == ':' ||
+            next == '\n' ||
+            next == '\r';
+        if (looksLikeTerminator) {
+          inString = false;
+          result.write(char);
+        } else {
+          result.write(r'\"');
+        }
+        continue;
+      }
+      result.write(char);
+    }
+    return result.toString();
   }
 
   String _stripJsonFence(String content) {

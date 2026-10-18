@@ -18,7 +18,13 @@ class QuestionCorrectionScreen extends ConsumerWidget {
         title: const Text('题目预览'),
         leading: IconButton(
           icon: const Icon(CupertinoIcons.chevron_left),
-          onPressed: () => context.go('/'),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/');
+            }
+          },
         ),
       ),
       body: Column(
@@ -51,14 +57,14 @@ class QuestionCorrectionScreen extends ConsumerWidget {
             children: <Widget>[
               Expanded(
                 child: OutlinedButton(
-                  onPressed: () => context.go('/capture/crop'),
+                  onPressed: () => context.push('/capture/crop'),
                   child: const Text('重新框选'),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: FilledButton(
-                  onPressed: () => context.go('/analysis/loading'),
+                  onPressed: () => context.push('/analysis/loading'),
                   child: const Text('开始分析'),
                 ),
               ),

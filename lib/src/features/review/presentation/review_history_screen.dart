@@ -20,7 +20,13 @@ class ReviewHistoryScreen extends ConsumerWidget {
         title: const Text('复习记录'),
         leading: IconButton(
           icon: const Icon(CupertinoIcons.chevron_left),
-          onPressed: () => context.go('/review'),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/review');
+            }
+          },
         ),
       ),
       body: logsAsync.when(
@@ -100,7 +106,7 @@ class ReviewHistoryScreen extends ConsumerWidget {
             ? () {
                 ref.read(currentQuestionProvider.notifier).state =
                     entry.question;
-                context.go('/notebook/question/${entry.question!.id}');
+                context.push('/notebook/question/${entry.question!.id}');
               }
             : null,
       ),

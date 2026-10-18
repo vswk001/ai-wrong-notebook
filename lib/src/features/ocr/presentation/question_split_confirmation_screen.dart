@@ -54,7 +54,7 @@ class _QuestionSplitConfirmationScreenState
         title: const Text('拆分保存'),
         leading: IconButton(
           icon: const Icon(CupertinoIcons.chevron_left),
-          onPressed: () => context.go('/analysis/result'),
+          onPressed: () => context.pushReplacement('/analysis/result'),
         ),
       ),
       body: SafeArea(
@@ -475,7 +475,7 @@ class _QuestionSplitConfirmationScreenState
             ),
             const SizedBox(height: 12),
             OutlinedButton.icon(
-              onPressed: () => context.go('/analysis/result'),
+              onPressed: () => context.pushReplacement('/analysis/result'),
               icon: const Icon(CupertinoIcons.chevron_left, size: 18),
               label: const Text('返回结果页'),
               style: OutlinedButton.styleFrom(

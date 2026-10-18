@@ -15,6 +15,7 @@ import 'package:smart_wrong_notebook/src/domain/models/question_record.dart';
 import 'package:smart_wrong_notebook/src/domain/services/exercise_round_service.dart';
 import 'package:smart_wrong_notebook/src/features/review/presentation/review_controller.dart';
 import 'package:smart_wrong_notebook/src/shared/widgets/math_content_view.dart';
+import 'package:smart_wrong_notebook/src/shared/widgets/rich_content_view.dart';
 
 final _exerciseGenerationJobProvider =
     StreamProvider.autoDispose.family<AnalysisJob?, String>((ref, questionId) {
@@ -55,7 +56,13 @@ class QuestionDetailScreen extends ConsumerWidget {
         title: const Text('错题详情'),
         leading: IconButton(
           icon: const Icon(CupertinoIcons.chevron_left),
-          onPressed: () => context.go('/notebook'),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/notebook');
+            }
+          },
         ),
         actions: <Widget>[
           IconButton(
@@ -214,7 +221,8 @@ class QuestionDetailScreen extends ConsumerWidget {
               group: batchGroup,
               onSelect: (question) {
                 ref.read(currentQuestionProvider.notifier).state = question;
-                context.go('/notebook/question/${question.id}');
+                context.pushReplacement(
+                    '/notebook/question/${question.id}');
               },
             ),
           ],
@@ -243,7 +251,7 @@ class QuestionDetailScreen extends ConsumerWidget {
                     onPressed: () {
                       ref.read(currentQuestionProvider.notifier).state =
                           current;
-                      context.go('/capture/correction');
+                      context.push('/capture/correction');
                     },
                     icon: const Icon(CupertinoIcons.camera),
                     label: const Text('去添加'),
@@ -332,7 +340,7 @@ class QuestionDetailScreen extends ConsumerWidget {
                       ),
                     ),
                   if (current.imagePath.isNotEmpty) const SizedBox(height: 10),
-                  MathContentView(
+                  RichContentView(
                     current.correctedText,
                     contentFormat: current.contentFormat,
                     style: TextStyle(
@@ -373,7 +381,7 @@ class QuestionDetailScreen extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  MathContentView(
+                  RichContentView(
                     result.finalAnswer,
                     style: TextStyle(
                         fontSize: 14,
@@ -400,7 +408,7 @@ class QuestionDetailScreen extends ConsumerWidget {
               border: const Color(0xFFFED7AA),
               title: '错因分析',
               titleColor: const Color(0xFF9A3412),
-              child: MathContentView(
+              child: RichContentView(
                 result.mistakeReason,
                 style: TextStyle(
                     fontSize: 14,
@@ -419,7 +427,7 @@ class QuestionDetailScreen extends ConsumerWidget {
               border: const Color(0xFFFDE68A),
               title: '学习建议',
               titleColor: const Color(0xFF92400E),
-              child: MathContentView(
+              child: RichContentView(
                 result.studyAdvice,
                 style: TextStyle(
                     fontSize: 14,
@@ -515,7 +523,7 @@ class QuestionDetailScreen extends ConsumerWidget {
                         ),
                         const SizedBox(width: 10),
                         Expanded(
-                            child: MathContentView(e.value,
+                            child: RichContentView(e.value,
                                 style: TextStyle(
                                     fontSize: 14,
                                     color: colorScheme.onSurface,
@@ -1629,7 +1637,7 @@ class _PracticeSummaryCardState extends ConsumerState<_PracticeSummaryCard> {
       returnRoute: '/notebook/question/${current.id}',
     );
     ref.read(currentQuestionProvider.notifier).state = current;
-    context.go('/exercise/practice');
+    context.push('/exercise/practice');
   }
 
   Future<void> _syncCompletedExerciseJob(AnalysisJob job) async {

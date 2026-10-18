@@ -173,7 +173,7 @@ class _CaptureEntrySheetState extends ConsumerState<CaptureEntrySheet> {
         Navigator.pop(context);
         ref.read(currentQuestionProvider.notifier).state = result.record;
         debugPrint('[CaptureEntrySheet] Navigating to /capture/crop');
-        router.go('/capture/crop');
+        router.push('/capture/crop');
       }
     } catch (e) {
       if (!mounted) return;

@@ -46,7 +46,13 @@ class _ExercisePracticeState extends ConsumerState<ExercisePracticeScreen> {
             title: const Text('练习'),
             leading: IconButton(
                 icon: const Icon(CupertinoIcons.chevron_left),
-                onPressed: () => context.go(fallbackRoute))),
+                onPressed: () {
+                  if (context.canPop()) {
+                    context.pop();
+                  } else {
+                    context.go(fallbackRoute);
+                  }
+                })),
         body: const Center(child: Text('未找到错题记录')),
       );
     }
@@ -80,7 +86,7 @@ class _ExercisePracticeState extends ConsumerState<ExercisePracticeScreen> {
           leading: IconButton(
             icon: const Icon(CupertinoIcons.chevron_left),
             onPressed: () =>
-                context.go(returnRoute ?? '/notebook/question/${current.id}'),
+                context.pushReplacement(returnRoute ?? '/notebook/question/${current.id}'),
           ),
         ),
         body: Center(
@@ -117,7 +123,13 @@ class _ExercisePracticeState extends ConsumerState<ExercisePracticeScreen> {
         title: Text('举一反三 ${_index + 1}/${exercises.length}'),
         leading: IconButton(
           icon: const Icon(CupertinoIcons.xmark),
-          onPressed: () => context.go(fallbackRoute),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(fallbackRoute);
+            }
+          },
         ),
       ),
       body: Column(
@@ -454,7 +466,13 @@ class _ExercisePracticeState extends ConsumerState<ExercisePracticeScreen> {
         title: Text('第 $roundIndex轮完成'),
         leading: IconButton(
           icon: const Icon(CupertinoIcons.xmark),
-          onPressed: () => context.go(fallbackRoute),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(fallbackRoute);
+            }
+          },
         ),
       ),
       body: SafeArea(
@@ -863,7 +881,7 @@ class _ExercisePracticeState extends ConsumerState<ExercisePracticeScreen> {
 
   void _returnToQuestionDetail(QuestionRecord question, String fallbackRoute) {
     ref.read(currentPracticeContextProvider.notifier).state = null;
-    context.go(fallbackRoute == '/notebook'
+    context.pushReplacement(fallbackRoute == '/notebook'
         ? '/notebook/question/${question.id}'
         : fallbackRoute);
   }
@@ -873,7 +891,7 @@ class _ExercisePracticeState extends ConsumerState<ExercisePracticeScreen> {
     if (practiceContext?.source != PracticeContextSource.analysis) {
       ref.read(currentPracticeContextProvider.notifier).state = null;
       if (!mounted) return;
-      context.go('/notebook/question/${question.id}');
+      context.pushReplacement('/notebook/question/${question.id}');
       return;
     }
 
@@ -892,7 +910,7 @@ class _ExercisePracticeState extends ConsumerState<ExercisePracticeScreen> {
               );
 
     if (!mounted) return;
-    context.go('/capture/split-confirmation');
+    context.push('/capture/split-confirmation');
   }
 
   QuestionRecord _updateAnalysisPracticeState(

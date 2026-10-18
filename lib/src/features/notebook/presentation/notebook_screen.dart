@@ -62,6 +62,11 @@ class _NotebookScreenState extends ConsumerState<NotebookScreen> {
         title: const Text('错题本'),
         actions: [
           IconButton(
+            icon: const Icon(CupertinoIcons.doc_plaintext),
+            onPressed: () => context.push('/notebook/exam'),
+            tooltip: '出卷',
+          ),
+          IconButton(
             icon: const Icon(CupertinoIcons.camera),
             onPressed: () => showModalBottomSheet<void>(
               context: context,
@@ -233,7 +238,7 @@ class _NotebookScreenState extends ConsumerState<NotebookScreen> {
                           onTap: () {
                             ref.read(currentQuestionProvider.notifier).state =
                                 q;
-                            context.go('/notebook/question/${q.id}');
+                            context.push('/notebook/question/${q.id}');
                           },
                           onDelete: () => _confirmDelete(context, ref, q),
                           onKnowledgePointTap: (kp) {

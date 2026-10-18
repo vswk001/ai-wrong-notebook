@@ -75,14 +75,14 @@ class _ImageCropScreenState extends ConsumerState<ImageCropScreen> {
       }
 
       if (mounted) {
-        context.go('/analysis/loading');
+        context.push('/analysis/loading');
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('裁剪失败: $e')),
         );
-        context.go('/capture/correction');
+        context.push('/capture/correction');
       }
     } finally {
       if (mounted) setState(() => _cropping = false);
@@ -96,7 +96,13 @@ class _ImageCropScreenState extends ConsumerState<ImageCropScreen> {
         title: const Text('框选题目'),
         leading: IconButton(
           icon: const Icon(CupertinoIcons.chevron_left),
-          onPressed: () => context.go('/'),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/');
+            }
+          },
         ),
       ),
       body: SafeArea(

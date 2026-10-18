@@ -54,7 +54,7 @@ class HomeScreen extends ConsumerWidget {
                     final result = task.resultQuestion;
                     if (result == null) return;
                     ref.read(currentQuestionProvider.notifier).state = result;
-                    context.go('/analysis/result');
+                    context.push('/analysis/result');
                   },
                   onRetry: (task) {
                     _retryTask(context, ref, task);
@@ -117,7 +117,7 @@ class HomeScreen extends ConsumerWidget {
           .read(scanTaskLifecycleServiceProvider)
           .prepareRetry(task.sourceQuestion);
       ref.read(currentQuestionProvider.notifier).state = task.sourceQuestion;
-      if (context.mounted) context.go('/analysis/loading');
+      if (context.mounted) context.push('/analysis/loading');
     } catch (error) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -371,7 +371,7 @@ class _RecentList extends StatelessWidget {
           question: q,
           onTap: () {
             ref.read(currentQuestionProvider.notifier).state = q;
-            context.go('/notebook/question/${q.id}');
+            context.push('/notebook/question/${q.id}');
           },
         );
       }),

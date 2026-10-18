@@ -113,7 +113,7 @@ class _AnalysisLoadingScreenState extends ConsumerState<AnalysisLoadingScreen> {
       ref.read(currentQuestionProvider.notifier).state = updated;
 
       _stepTimer?.cancel();
-      context.go('/analysis/result');
+      context.pushReplacement('/analysis/result');
     } on AiAnalysisException catch (e) {
       if (mounted) {
         setState(() {

@@ -10,6 +10,7 @@ import 'package:smart_wrong_notebook/src/domain/models/mastery_level.dart';
 import 'package:smart_wrong_notebook/src/domain/models/question_record.dart';
 import 'package:smart_wrong_notebook/src/domain/models/question_split_result.dart';
 import 'package:smart_wrong_notebook/src/shared/widgets/math_content_view.dart';
+import 'package:smart_wrong_notebook/src/shared/widgets/rich_content_view.dart';
 
 class AnalysisResultScreen extends ConsumerStatefulWidget {
   const AnalysisResultScreen({super.key});
@@ -39,7 +40,7 @@ class _AnalysisResultScreenState extends ConsumerState<AnalysisResultScreen> {
           title: const Text('AI 解析结果'),
           leading: IconButton(
             icon: const Icon(CupertinoIcons.chevron_left),
-            onPressed: () => context.go('/analysis/loading'),
+            onPressed: () => context.pushReplacement('/analysis/loading'),
           ),
         ),
         body: const Center(child: Text('未找到错题记录')),
@@ -329,7 +330,7 @@ class _AnalysisResultScreenState extends ConsumerState<AnalysisResultScreen> {
                     ),
                   if (File(record.imagePath).existsSync())
                     const SizedBox(height: 10),
-                  MathContentView(
+                  RichContentView(
                     displayQuestionText,
                     contentFormat: hasMultipleCandidates
                         ? QuestionContentFormat.latexMixed
@@ -372,7 +373,7 @@ class _AnalysisResultScreenState extends ConsumerState<AnalysisResultScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  MathContentView(
+                  RichContentView(
                     displayResult.finalAnswer,
                     style: TextStyle(
                         fontSize: 14,
@@ -396,7 +397,7 @@ class _AnalysisResultScreenState extends ConsumerState<AnalysisResultScreen> {
                       alignment: Alignment.centerLeft,
                       child: OutlinedButton.icon(
                         onPressed: () =>
-                            context.go('/analysis/text-correction'),
+                            context.push('/analysis/text-correction'),
                         icon: const Icon(CupertinoIcons.pencil, size: 17),
                         label: const Text('核对题干后重新解析'),
                       ),
@@ -414,7 +415,7 @@ class _AnalysisResultScreenState extends ConsumerState<AnalysisResultScreen> {
               border: const Color(0xFFFED7AA),
               title: '错因分析',
               titleColor: const Color(0xFF9A3412),
-              contentWidget: MathContentView(
+              contentWidget: RichContentView(
                 displayResult.mistakeReason,
                 style: TextStyle(
                     fontSize: 14,
@@ -433,7 +434,7 @@ class _AnalysisResultScreenState extends ConsumerState<AnalysisResultScreen> {
               border: const Color(0xFFFDE68A),
               title: '学习建议',
               titleColor: const Color(0xFF92400E),
-              contentWidget: MathContentView(
+              contentWidget: RichContentView(
                 displayResult.studyAdvice,
                 style: TextStyle(
                     fontSize: 14,
@@ -564,7 +565,7 @@ class _AnalysisResultScreenState extends ConsumerState<AnalysisResultScreen> {
                         ),
                         const SizedBox(width: 10),
                         Expanded(
-                            child: MathContentView(e.value,
+                            child: RichContentView(e.value,
                                 style: TextStyle(
                                     fontSize: 14,
                                     color: colorScheme.onSurface,
@@ -588,7 +589,7 @@ class _AnalysisResultScreenState extends ConsumerState<AnalysisResultScreen> {
                           splitter: splitter,
                         );
                         if (!context.mounted) return;
-                        context.go('/capture/split-confirmation');
+                        context.push('/capture/split-confirmation');
                       },
                 child: Text(hasRetryingCandidate ? '有题正在重新解析' : '保存到错题本'),
               ),

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -91,7 +93,7 @@ class ReviewScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 24),
                 GestureDetector(
-                  onTap: () => context.go('/review/history'),
+                  onTap: () => context.push('/review/history'),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 12),
@@ -268,7 +270,7 @@ class _ReviewQuestionList extends StatelessWidget {
                 batchLabel: _batchLabel(q, batchGroups),
                 onOpen: () {
                   ref.read(currentQuestionProvider.notifier).state = q;
-                  context.go('/notebook/question/${q.id}');
+                  context.push('/notebook/question/${q.id}');
                 },
               ))
           .toList(),
@@ -346,6 +348,28 @@ class _ReviewCard extends StatelessWidget {
   final VoidCallback onOpen;
   final String? batchLabel;
 
+  bool _hasImage(QuestionRecord question) {
+    if (question.imagePath.isEmpty) return false;
+    try {
+      return File(question.imagePath).existsSync();
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Widget _subjectBadge(bool isDark) {
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: question.subject.color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Icon(question.subject.icon,
+          size: 18, color: question.subject.color),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -365,16 +389,21 @@ class _ReviewCard extends StatelessWidget {
           ),
           child: Row(
             children: <Widget>[
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: question.subject.color.withValues(alpha: 0.1),
+              if (_hasImage(question))
+                ClipRRect(
                   borderRadius: BorderRadius.circular(20),
-                ),
-                child: Icon(question.subject.icon,
-                    size: 18, color: question.subject.color),
-              ),
+                  child: SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: Image.file(
+                      File(question.imagePath),
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => _subjectBadge(isDark),
+                    ),
+                  ),
+                )
+              else
+                _subjectBadge(isDark),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(

@@ -51,7 +51,11 @@ class _QuestionTextCorrectionScreenState
         title: const Text('核对题干'),
         leading: IconButton(
           icon: const Icon(CupertinoIcons.chevron_left),
-          onPressed: _submitting ? null : () => context.go('/analysis/result'),
+          onPressed: _submitting
+              ? null
+              : () => context.canPop()
+                  ? context.pop()
+                  : context.go('/analysis/result'),
         ),
       ),
       body: SafeArea(
@@ -163,7 +167,7 @@ class _QuestionTextCorrectionScreenState
       // the same build scope.
       await WidgetsBinding.instance.endOfFrame;
       if (!mounted) return;
-      context.go('/analysis/loading');
+      context.pushReplacement('/analysis/loading');
     } catch (error) {
       if (!mounted) return;
       setState(() {

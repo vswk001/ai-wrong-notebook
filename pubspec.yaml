@@ -32,7 +32,11 @@ dependencies:
   flutter_math_fork: ^0.7.4
   webview_flutter: ^4.10.0
   markdown: ^7.3.1
-  pdf: ^3.11.3
+  pdf: ^3.13.1
+  # pdf 的传递依赖 image 4.11 与旧 archive 组合编译失败（decodeLazy 缺失），
+  # 显式固定到含修复的最新组合。
+  archive: ^4.5.2
+  image: ^4.12.0
 
 dev_dependencies:
   flutter_test:

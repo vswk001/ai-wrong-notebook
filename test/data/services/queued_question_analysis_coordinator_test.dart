@@ -195,18 +195,20 @@ void main() {
       providerConfigId: 'test',
       modelName: 'test-model',
     );
+    // 终态任务在入队清理时只保留 30 天；用相对日期避免测试随时间失效。
+    final rootAt = DateTime.now().subtract(const Duration(days: 1));
     final rootJob = AnalysisJob.queued(
       id: rootTask.id,
       idempotencyKey: rootTask.id,
       taskSpec: rootTask,
       route: route.resolve(rootTask, promptVersion: 'analysis-v1'),
       payloadJson: jsonEncode(<String, dynamic>{'question': source.toJson()}),
-      createdAt: DateTime(2026, 8, 5),
+      createdAt: rootAt,
     ).copyWith(
       status: AnalysisJobStatus.completed,
       attemptCount: 1,
       resultJson: jsonEncode(source.toJson()),
-      completedAt: DateTime(2026, 8, 5),
+      completedAt: rootAt,
     );
     await repository.enqueue(rootJob);
 

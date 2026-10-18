@@ -35,7 +35,7 @@ class MathContentView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final trimmed = content.trim();
+    final trimmed = _stripDiagramFence(content.trim());
     final ts = (style ?? DefaultTextStyle.of(context).style).copyWith(
       color: color,
       fontWeight: fontWeight,
@@ -118,6 +118,15 @@ class MathContentView extends StatelessWidget {
     if (!KatexMathView.enabled) return plain;
     return KatexMathView(tex, fallback: plain);
   }
+
+  // ── diagram 围栏（AI 图形结构化数据）──
+
+  static final _reDiagramFence =
+      RegExp(r'```(?:\s*)diagram[\s\S]*?(?:```|$)', caseSensitive: false);
+
+  /// 剥离题干中的 diagram 围栏；图形由 RichContentView 渲染。
+  static String _stripDiagramFence(String v) =>
+      v.replaceAll(_reDiagramFence, '').trim();
 
   // ── Single normalization pass ──
 

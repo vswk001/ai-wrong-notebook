@@ -278,7 +278,7 @@ class QuestionDetailScreen extends ConsumerWidget {
                     GestureDetector(
                       onTap: () => _showFullImage(context, current.imagePath),
                       child: Container(
-                        height: 120,
+                        height: 200,
                         decoration: BoxDecoration(
                           color: Theme.of(context)
                               .colorScheme
@@ -292,7 +292,7 @@ class QuestionDetailScreen extends ConsumerWidget {
                               child: Image.file(
                                 File(current.imagePath),
                                 width: double.infinity,
-                                height: 120,
+                                height: 200,
                                 fit: BoxFit.contain,
                                 errorBuilder: (_, __, ___) => Center(
                                   child: Column(

@@ -1,6 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 
 import 'package:smart_wrong_notebook/src/domain/models/question_record.dart';
+import 'package:smart_wrong_notebook/src/features/analysis/presentation/widgets/geometry_diagram_widget.dart';
 import 'package:smart_wrong_notebook/src/shared/widgets/math_content_view.dart';
 
 /// 混合内容视图：AI 输出里的 markdown 表格块渲染为原生表格，
@@ -19,6 +22,9 @@ class RichContentView extends StatelessWidget {
 
   static final _tableRow = RegExp(r'^\s*\|.*\|\s*$');
   static final _tableSeparator = RegExp(r'^\s*\|?[\s:\-]*\-[\s:\-|]*\|?\s*$');
+  static final _diagramFence = RegExp(
+      r'```(?:\s*)diagram\s*\n?([\s\S]*?)```',
+      caseSensitive: false);
 
   @override
   Widget build(BuildContext context) {
@@ -26,6 +32,10 @@ class RichContentView extends StatelessWidget {
     if (trimmed.isEmpty) {
       return MathContentView(content,
           contentFormat: contentFormat, style: style);
+    }
+
+    if (_diagramFence.hasMatch(trimmed)) {
+      return _buildWithDiagrams(context, trimmed);
     }
 
     final blocks = _splitBlocks(trimmed);
@@ -48,6 +58,80 @@ class RichContentView extends StatelessWidget {
         ],
       ],
     );
+  }
+
+  /// 拆出 diagram 围栏渲染为图形，其余内容继续走表格/公式渲染。
+  Widget _buildWithDiagrams(BuildContext context, String text) {
+    final widgets = <Widget>[];
+    var cursor = 0;
+    for (final match in _diagramFence.allMatches(text)) {
+      if (match.start > cursor) {
+        final head = text.substring(cursor, match.start).trim();
+        if (head.isNotEmpty) {
+          widgets.add(_buildNonDiagram(context, head));
+          widgets.add(const SizedBox(height: 8));
+        }
+      }
+      final rawJson = match.group(1)?.trim() ?? '';
+      widgets.add(_buildDiagram(context, rawJson));
+      widgets.add(const SizedBox(height: 8));
+      cursor = match.end;
+    }
+    final tail = text.substring(cursor).trim();
+    if (tail.isNotEmpty) {
+      widgets.add(_buildNonDiagram(context, tail));
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: widgets,
+    );
+  }
+
+  Widget _buildNonDiagram(BuildContext context, String text) {
+    final blocks = _splitBlocks(text);
+    final hasTable = blocks.any((block) => block.isTable);
+    if (!hasTable) {
+      return MathContentView(text,
+          contentFormat: contentFormat, style: style);
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        for (final block in blocks) ...<Widget>[
+          if (block.isTable)
+            _buildTable(context, block.lines)
+          else
+            MathContentView(block.text,
+                contentFormat: contentFormat, style: style),
+          const SizedBox(height: 8),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildDiagram(BuildContext context, String rawJson) {
+    Map<String, dynamic>? data;
+    try {
+      final decoded = jsonDecode(rawJson);
+      if (decoded is Map) data = Map<String, dynamic>.from(decoded);
+    } catch (_) {
+      data = null;
+    }
+    final colorScheme = Theme.of(context).colorScheme;
+    if (data == null) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Text('（图形数据无法解析，请查看原图）',
+            style: TextStyle(
+                fontSize: 12, color: colorScheme.onSurfaceVariant)),
+      );
+    }
+    return GeometryDiagramWidget(diagramData: data);
   }
 
   List<_ContentBlock> _splitBlocks(String text) {

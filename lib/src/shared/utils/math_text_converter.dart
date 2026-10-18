@@ -51,10 +51,15 @@ class MathTextConverter {
 
   /// 入口：LaTeX/混合文本 → 可读文本。
   static String toReadable(String value) {
-    if (!value.contains('\\') && !value.contains('^') && !value.contains('_')) {
-      return value.replaceAll(_reSpaces, ' ').trim();
+    // diagram 围栏是图形结构化数据，PDF 中不渲染，剥离。
+    var source = value.replaceAll(
+        RegExp(r'```(?:\s*)diagram[\s\S]*?(?:```|$)'), '');
+    if (!source.contains('\\') &&
+        !source.contains('^') &&
+        !source.contains('_')) {
+      return source.replaceAll(_reSpaces, ' ').trim();
     }
-    var r = value;
+    var r = source;
     // 反斜杠双写（AI JSON 转义残留）先归一
     r = r.replaceAllMapped(RegExp(r'\\\\([a-zA-Z]+)'), (m) => '\\${m.group(1)}');
     r = r.replaceAllMapped(RegExp(r'\\\\(.)'), (m) => '\\${m.group(1)}');

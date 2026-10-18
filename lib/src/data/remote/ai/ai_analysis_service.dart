@@ -517,7 +517,7 @@ class AiAnalysisService {
         prompt: _buildExtractionPrompt(
             subjectName: subjectName, textHint: textHint),
         imageBytes: imageBytes,
-        maxTokens: 1600,
+        maxTokens: 2800,
         imageDetail: 'auto',
         // 结构化提取是转写任务，思考只会消耗输出预算导致 content 为空。
         disableThinking: true,
@@ -2272,6 +2272,18 @@ class AiAnalysisService {
   6. JSON 转义规则：反斜杠双写，\ → \\，\\ → \\\\。换行用 \\n。cases 环境行分隔符 \\ → \\\\
      - 示例：\\(x^2=4\)\\n  所以 x=\\pm 2  // JSON 中 \\n = 换行，\\pi = \pi，\\pm = \pm
      - 示例：\[\\begin{cases} x+y=5 \\\\ x-y=1 \\end{cases}\]  // \\\\ 在 JSON 中表示 LaTeX 换行符 \\
+- 【图形结构化还原——重要】若图中含几何图形、方格图（如铺地锦/格子乘法）、线段图、树状图、统计图、坐标系图形等，必须在 extractedQuestionText 文本末尾额外附加一个 ```diagram 围栏，用 JSON 忠实还原图形。坐标取 0~1 归一化（左上角为原点，x 向右 y 向下）。可用元素：
+  - {"type":"line","x1":0.1,"y1":0.2,"x2":0.9,"y2":0.2,"style":"solid"}（style 可选 solid/dashed）
+  - {"type":"polygon","points":[[0.1,0.1],[0.9,0.1],[0.9,0.5],[0.1,0.5]],"filled":false}
+  - {"type":"text","text":"14","x":0.3,"y":0.25,"fontSize":15}
+  - {"type":"point","x":0.5,"y":0.5,"label":"A"}
+  - {"type":"ellipse","cx":0.5,"cy":0.5,"rx":0.2,"ry":0.2}
+  - {"type":"arc","cx":0.5,"cy":0.5,"r":0.2,"startAngle":0,"sweepAngle":1.5}
+  - {"type":"angleArc","vx":0.3,"vy":0.6,"startAngle":0,"sweepAngle":0.8,"r":0.08,"label":"40°"}
+  - {"type":"rightAngle","x":0.5,"y":0.5,"size":0.03}
+  - {"type":"tickMark","x1":0.2,"y1":0.3,"x2":0.4,"y2":0.3,"ticks":1}
+  示例——铺地锦（格子乘法）图：外框大矩形，竖线均分为若干格，每格一条自左下到右上的斜线，每格斜线上、下方各一个数字，框上方一排乘数数字、框右侧一个乘数数字。必须按图中真实格子数与数字忠实还原，位置与原图一致。
+  纯文字题不要输出 diagram 围栏；围栏内 JSON 的英文引号必须转义为 \"。
 返回格式必须严格如下（不要包含 markdown 代码块标记，使用纯 JSON）：
 {
   "subject": "自动判断的科目名称",
@@ -2361,6 +2373,8 @@ class AiAnalysisService {
     buffer.writeln();
     buffer.writeln(
         '若题目包含图形/示意图，请先忠实描述原图中真实看到的图形类型、边界、标注和目标区域；看不清就写不确定，不要猜成梯形/半圆/扇形等特定题型。');
+    buffer.writeln(
+        '【必须检查】若图片中包含任何图形（几何图、方格图、线段图、树状图、统计图、坐标系等），必须在 extractedQuestionText 的题目文字末尾附加一个 ```diagram 围栏，按系统指令用 JSON 元素忠实还原图形：图形的形状、分隔线、斜线、标注数字及其位置都要与原图一致；围栏内 JSON 的英文引号转义为 \\"。没有图形则不要附加。');
     buffer.writeln(
         '请输出 subject、extractedQuestionText、normalizedQuestionText。方程组或多行公式请使用 aligned/cases 环境，不要使用 \\newline。');
     return buffer.toString();

@@ -137,13 +137,15 @@ class DriftAnalysisJobRepository implements AnalysisJobRepository {
         );
         if (hasInvalidDependency) {
           final now = DateTime.now();
+          final failureDetail = _describeFailedDependency(dependencies);
           await (_db.update(_db.analysisJobs)
                 ..where((table) =>
                     table.id.equals(job.id) &
                     table.status.equals(AnalysisJobStatus.queued.name)))
               .write(db.AnalysisJobsCompanion(
             status: Value(AnalysisJobStatus.failed.name),
-            errorMessage: const Value('前置 AI 任务失败，当前任务已停止。'),
+            errorMessage: Value(
+                '前置 AI 任务失败，当前任务已停止。$failureDetail'),
             updatedAt: Value(now),
             completedAt: Value(now),
           ));
@@ -283,6 +285,21 @@ class DriftAnalysisJobRepository implements AnalysisJobRepository {
         ));
       }
     });
+  }
+
+  /// 把前置任务的真实失败原因带出来，否则界面只能看到“前置 AI 任务失败”。
+  String _describeFailedDependency(List<AnalysisJob?> dependencies) {
+    for (final dependency in dependencies) {
+      final failedOrMissing = dependency == null ||
+          dependency.status == AnalysisJobStatus.failed ||
+          dependency.status == AnalysisJobStatus.cancelled;
+      if (!failedOrMissing) continue;
+      if (dependency == null) return '（前置任务不存在，可能已被清理。）';
+      final detail = dependency.errorMessage?.trim() ?? '';
+      if (detail.isEmpty) return '（前置任务未记录错误详情。）';
+      return '原因：$detail';
+    }
+    return '';
   }
 
   int _compareQueueOrder(AnalysisJob left, AnalysisJob right) {

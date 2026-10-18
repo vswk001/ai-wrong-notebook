@@ -67,7 +67,7 @@ void main() {
           (imagePart['image_url'] as Map<dynamic, dynamic>)['url'] as String;
       expect(imageUrl, startsWith('data:image/png;base64,'));
       _expectValidPng(base64Decode(imageUrl.split(',').last));
-      expect(payload['max_tokens'], 8);
+      expect(payload['max_tokens'], 512);
 
       request.response.headers.contentType = ContentType.json;
       request.response.write(jsonEncode(<String, dynamic>{

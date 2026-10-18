@@ -121,6 +121,14 @@ class _AnalysisLoadingScreenState extends ConsumerState<AnalysisLoadingScreen> {
           _debugInfo = debugInfo;
         });
       }
+    } catch (e) {
+      // 未预期异常不能让页面停在无限加载状态。
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'AI 解析失败: $e';
+          _debugInfo = debugInfo;
+        });
+      }
     }
   }
 

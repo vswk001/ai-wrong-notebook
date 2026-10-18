@@ -238,8 +238,22 @@ class AiAnalysisService {
       }
       data = jsonDecode(trimmed);
     }
-    return (data as Map<String, dynamic>)['choices'][0]['message']['content']
-        as String;
+    final choices = (data as Map<String, dynamic>)['choices'];
+    if (choices is! List || choices.isEmpty || choices.first is! Map) {
+      throw const FormatException('AI 响应缺少 choices，无法读取回复内容');
+    }
+    final message = (choices.first as Map)['message'];
+    final finishReason =
+        (choices.first as Map)['finish_reason']?.toString();
+    final content = message is Map ? message['content'] : null;
+    if (content is! String || content.trim().isEmpty) {
+      if (finishReason == 'length') {
+        throw const FormatException(
+            'AI 思考/输出占满了 max_tokens，回复内容为空或被截断，请重试');
+      }
+      throw const FormatException('AI 未返回任何回复内容，请重试');
+    }
+    return content;
   }
 
   String _extractContentFromSse(String body) {
@@ -333,22 +347,30 @@ class AiAnalysisService {
     final baseUrl = config.effectiveBaseUrl.toLowerCase();
 
     try {
-      // 只检查 HTTP 200 状态码，不检查返回内容
+      // 思考模型（GLM 4.5+/5.x）的 reasoning_content 计入 max_tokens，
+      // 小预算会导致 content 为空；探测要验证的是“能输出内容”，所以关闭思考。
+      final thinking = _thinkingParameter(config, disableThinking: true);
+      final probeBody = <String, dynamic>{
+        'model': config.model,
+        'messages': [
+          {
+            'role': 'user',
+            'content': _visionProbeContent(),
+          },
+        ],
+        'max_tokens': 512,
+        if (thinking != null) 'thinking': thinking,
+      };
+
+      // 不只检查 HTTP 200，还要确认模型真的返回了文本，
+      // 否则“测试成功”的模型到了正式解析时才发现不产出内容。
+      Response<dynamic> response;
       if (baseUrl.contains('openrouter')) {
         debugPrint('[AiAnalysisService] Testing OpenRouter endpoint');
-        await dio.post('/chat/completions', data: <String, dynamic>{
-          'model': config.model,
-          'messages': [
-            {
-              'role': 'user',
-              'content': _visionProbeContent(),
-            },
-          ],
-          'max_tokens': 8,
-        });
+        response = await dio.post('/chat/completions', data: probeBody);
       } else if (config.model.toLowerCase().contains('gemini')) {
         debugPrint('[AiAnalysisService] Testing Gemini endpoint');
-        await dio.post(
+        final geminiResponse = await dio.post(
           '/v1beta/models/${config.model}:generateContent',
           data: <String, dynamic>{
             'contents': [
@@ -364,28 +386,36 @@ class AiAnalysisService {
                 ]
               },
             ],
-            'generationConfig': {'maxOutputTokens': 8},
+            'generationConfig': {'maxOutputTokens': 512},
           },
         );
+        final candidates =
+            geminiResponse.data?['candidates'] as List? ?? const [];
+        final geminiText = candidates.isNotEmpty &&
+                candidates.first is Map
+            ? ((((candidates.first as Map)['content'] as Map?)?['parts']
+                    as List?)?.first as Map?)?['text']
+          : null;
+        if (geminiText is! String || geminiText.trim().isEmpty) {
+          throw const AiAnalysisException(
+              '测试通过但模型未返回文本内容，正式解析可能失败，请更换模型');
+        }
+        debugPrint('[AiAnalysisService] Connection test passed');
+        return;
       } else {
         debugPrint('[AiAnalysisService] Testing default OpenAI endpoint');
-        await dio.post('/chat/completions', data: <String, dynamic>{
-          'model': config.model,
-          'messages': [
-            {
-              'role': 'user',
-              'content': _visionProbeContent(),
-            },
-          ],
-          'max_tokens': 8,
-        });
+        response = await dio.post('/chat/completions', data: probeBody);
       }
 
-      debugPrint('[AiAnalysisService] Connection test passed (HTTP 200)');
+      final content = _extractContentFromResponse(response);
+      debugPrint(
+          '[AiAnalysisService] Connection test passed, content: $content');
     } on DioException catch (e) {
       debugPrint(
           '[AiAnalysisService] testConnection DioException: type=${e.type}, message=${e.message}');
       throw AiAnalysisException(_dioErrorMessage(e));
+    } on AiAnalysisException {
+      rethrow;
     } catch (e) {
       debugPrint('[AiAnalysisService] Exception: $e');
       throw AiAnalysisException('测试失败: $e');
@@ -484,6 +514,8 @@ class AiAnalysisService {
         imageBytes: imageBytes,
         maxTokens: 1600,
         imageDetail: 'auto',
+        // 结构化提取是转写任务，思考只会消耗输出预算导致 content 为空。
+        disableThinking: true,
       );
       final extraction = _parseExtractionResponse(extractionContent);
 
@@ -802,6 +834,7 @@ class AiAnalysisService {
         prompt: prompt,
         maxTokens: 1800,
         temperature: 0.45,
+        disableThinking: true,
       );
       final map = _parseResponseJson(content);
       return _parseGeneratedExercises(
@@ -846,6 +879,7 @@ class AiAnalysisService {
         prompt: prompt,
         maxTokens: 1200,
         temperature: 0.35,
+        disableThinking: true,
       );
       final answer = content.trim();
       if (answer.isEmpty) throw AiAnalysisException('AI 暂未返回答疑内容');
@@ -925,6 +959,7 @@ class AiAnalysisService {
               maxTokens: 1200,
               imageDetail: 'high',
               temperature: 0.1,
+              disableThinking: true,
             )
           : await _requestAiContent(
               config: config,
@@ -932,6 +967,7 @@ class AiAnalysisService {
               prompt: prompt,
               maxTokens: 1000,
               temperature: 0.1,
+              disableThinking: true,
             );
       final verification = _parseConsistencyVerificationResponse(content);
       return _applyConsistencyVerification(analysis, verification);
@@ -1983,32 +2019,60 @@ class AiAnalysisService {
     return segments;
   }
 
+  /// 智谱 GLM 4.5+/5.x 是思考模型：reasoning_content 计入 max_tokens，
+  /// 预算被思考耗尽时 content 为空或被截断（HTTP 仍是 200）。
+  /// 提取/判题等短输出任务必须关闭思考；解题任务保留思考但要放大输出预算。
+  bool _isBigmodelHost(AiProviderConfig config) {
+    return config.effectiveBaseUrl.toLowerCase().contains('bigmodel.cn');
+  }
+
+  Map<String, dynamic>? _thinkingParameter(
+    AiProviderConfig config, {
+    required bool disableThinking,
+  }) {
+    if (!_isBigmodelHost(config)) return null;
+    return <String, dynamic>{'type': disableThinking ? 'disabled' : 'enabled'};
+  }
+
+  int _reasoningSafeMaxTokens(AiProviderConfig config, int requested) {
+    if (!_isBigmodelHost(config)) return requested;
+    return requested < 16384 ? 16384 : requested;
+  }
+
   Future<String> _requestAiContent({
     required AiProviderConfig config,
     required String systemPrompt,
     required String prompt,
     int maxTokens = 2000,
     double temperature = 0.7,
+    bool disableThinking = false,
   }) async {
     final dio = _createClient(config);
-    final response =
-        await _retryPost(dio, '/chat/completions', data: <String, dynamic>{
+    final body = <String, dynamic>{
       'model': config.model,
       'messages': <Map<String, String>>[
         <String, String>{'role': 'system', 'content': systemPrompt},
         <String, String>{'role': 'user', 'content': prompt},
       ],
       'temperature': temperature,
-      'max_tokens': maxTokens,
-    });
+      'max_tokens':
+          disableThinking ? maxTokens : _reasoningSafeMaxTokens(config, maxTokens),
+    };
+    final thinking =
+        _thinkingParameter(config, disableThinking: disableThinking);
+    if (thinking != null) {
+      body['thinking'] = thinking;
+    }
+    final response = await _retryPost(dio, '/chat/completions', data: body);
 
     return _extractContentFromResponse(response);
   }
 
   bool _usesOpenAiCompatibleChat(AiProviderConfig config) {
-    final baseUrl = config.baseUrl.toLowerCase();
+    final baseUrl = config.effectiveBaseUrl.toLowerCase();
     final model = config.model.toLowerCase();
     return baseUrl.contains('/v1') ||
+        baseUrl.contains('bigmodel.cn') ||
         baseUrl.contains('openrouter') ||
         model.contains('gpt') ||
         model.contains('4o') ||
@@ -2023,16 +2087,19 @@ class AiAnalysisService {
     int maxTokens = 2000,
     String imageDetail = 'auto',
     double temperature = 0.7,
+    bool disableThinking = false,
   }) async {
     final dio = _createClient(config);
     final base64Image = base64Encode(imageBytes);
     const mimeType = 'image/jpeg';
-    final baseUrl = config.baseUrl.toLowerCase();
+    final baseUrl = config.effectiveBaseUrl.toLowerCase();
     final model = config.model.toLowerCase();
+    final effectiveMaxTokens = disableThinking
+        ? maxTokens
+        : _reasoningSafeMaxTokens(config, maxTokens);
 
-    if (_usesOpenAiCompatibleChat(config)) {
-      final response =
-          await _retryPost(dio, '/chat/completions', data: <String, dynamic>{
+    Map<String, dynamic> chatBody() {
+      final body = <String, dynamic>{
         'model': config.model,
         'messages': <Map<String, dynamic>>[
           {'role': 'system', 'content': systemPrompt},
@@ -2051,8 +2118,19 @@ class AiAnalysisService {
           },
         ],
         'temperature': temperature,
-        'max_tokens': maxTokens,
-      });
+        'max_tokens': effectiveMaxTokens,
+      };
+      final thinking =
+          _thinkingParameter(config, disableThinking: disableThinking);
+      if (thinking != null) {
+        body['thinking'] = thinking;
+      }
+      return body;
+    }
+
+    if (_usesOpenAiCompatibleChat(config)) {
+      final response = await _retryPost(dio, '/chat/completions',
+          data: chatBody());
       return _extractContentFromResponse(response);
     }
 
@@ -2081,28 +2159,8 @@ class AiAnalysisService {
     }
 
     final response =
-        await _retryPost(dio, '/chat/completions', data: <String, dynamic>{
-      'model': config.model,
-      'messages': <Map<String, dynamic>>[
-        {'role': 'system', 'content': systemPrompt},
-        {
-          'role': 'user',
-          'content': [
-            {
-              'type': 'image_url',
-              'image_url': {
-                'url': 'data:$mimeType;base64,$base64Image',
-                'detail': imageDetail
-              },
-            },
-            {'type': 'text', 'text': prompt},
-          ],
-        },
-      ],
-      'temperature': temperature,
-      'max_tokens': maxTokens,
-    });
-    return response.data['choices'][0]['message']['content'] as String;
+        await _retryPost(dio, '/chat/completions', data: chatBody());
+    return _extractContentFromResponse(response);
   }
 
   static const _defaultAnalysisSystemPrompt = r'''你是一个专业的错题分析助手，专门帮助学生分析和理解错题。
@@ -4444,8 +4502,7 @@ class AiAnalysisService {
         _buildJudgePrompt(question, userAnswer, correctAnswer, options);
 
     try {
-      final response =
-          await _retryPost(dio, '/chat/completions', data: <String, dynamic>{
+      final body = <String, dynamic>{
         'model': config.model,
         'messages': <Map<String, String>>[
           <String, String>{
@@ -4456,10 +4513,15 @@ class AiAnalysisService {
         ],
         'temperature': 0.1,
         'max_tokens': 50,
-      });
+      };
+      final thinking = _thinkingParameter(config, disableThinking: true);
+      if (thinking != null) {
+        body['thinking'] = thinking;
+      }
+      final response =
+          await _retryPost(dio, '/chat/completions', data: body);
 
-      final content =
-          response.data['choices'][0]['message']['content'] as String;
+      final content = _extractContentFromResponse(response);
       debugPrint('[AiAnalysisService] judgeAnswer response: $content');
 
       // 解析 AI 判断结果

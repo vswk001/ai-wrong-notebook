@@ -402,7 +402,7 @@ class AiAnalysisService {
           }
         }
         if (geminiText == null || geminiText.trim().isEmpty) {
-          throw const AiAnalysisException(
+          throw AiAnalysisException(
               '测试通过但模型未返回文本内容，正式解析可能失败，请更换模型');
         }
         debugPrint('[AiAnalysisService] Connection test passed');

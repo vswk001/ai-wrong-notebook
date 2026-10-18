@@ -72,9 +72,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release upload "${{ github.ref_name }}" \
-            build/app/outputs/flutter-apk/app-release.apk#ai-wrong-notebook-${{ github.ref_name }}.apk \
-            --clobber
+          cp build/app/outputs/flutter-apk/app-release.apk "ai-wrong-notebook-${{ github.ref_name }}.apk"
+          gh release upload "${{ github.ref_name }}" "ai-wrong-notebook-${{ github.ref_name }}.apk" --clobber
 
       - name: Upload APK archive
         env:
@@ -88,6 +87,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release upload "${{ github.ref_name }}" \
-            build/app/outputs/bundle/release/app-release.aab#ai-wrong-notebook-${{ github.ref_name }}.aab \
-            --clobber
+          cp build/app/outputs/bundle/release/app-release.aab "ai-wrong-notebook-${{ github.ref_name }}.aab"
+          gh release upload "${{ github.ref_name }}" "ai-wrong-notebook-${{ github.ref_name }}.aab" --clobber

@@ -135,7 +135,8 @@ void main() {
     expect(find.text('解析题干 completed'), findsOneWidget);
     expect(find.text('解析好了，待确认'), findsOneWidget);
     expect(find.text('查看结果'), findsOneWidget);
-    expect(find.text('解析失败'), findsOneWidget);
+    // 失败卡片会透出真实错误信息（errorMessage: '网络失败'）。
+    expect(find.textContaining('解析失败：网络失败'), findsOneWidget);
 
     await tester.tap(find.text('查看结果'));
     expect(openedId, 'completed');

@@ -37,12 +37,19 @@ android {
         multiDexEnabled = true
     }
 
+    // CI 等没有签名密钥的环境回退 debug 签名，保证 APK 可构建可安装；
+    // 存在 key.properties（Release 工作流注入）时仍用正式签名。
+    val hasReleaseSigning = keystoreProperties.getProperty("keyAlias") != null &&
+        keystoreProperties.getProperty("storeFile") != null
+
     signingConfigs {
-        create("release") {
-            keyAlias = keystoreProperties["keyAlias"] as String
-            keyPassword = keystoreProperties["keyPassword"] as String
-            storeFile = rootProject.file(keystoreProperties["storeFile"] as String)
-            storePassword = keystoreProperties["storePassword"] as String
+        if (hasReleaseSigning) {
+            create("release") {
+                keyAlias = keystoreProperties["keyAlias"] as String
+                keyPassword = keystoreProperties["keyPassword"] as String
+                storeFile = rootProject.file(keystoreProperties["storeFile"] as String)
+                storePassword = keystoreProperties["storePassword"] as String
+            }
         }
     }
 
@@ -51,7 +58,11 @@ android {
             isMinifyEnabled = false
         }
         release {
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = if (hasReleaseSigning) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
             isMinifyEnabled = false
             isShrinkResources = false
         }

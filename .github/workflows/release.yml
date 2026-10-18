@@ -19,24 +19,27 @@ jobs:
           channel: stable
           flutter-version: 3.41.0
 
-      - name: Restore Android signing key
+      - name: Restore Android signing key (optional)
+        id: signing
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          test -n "$ANDROID_KEYSTORE_BASE64"
-          test -n "$ANDROID_KEYSTORE_PASSWORD"
-          test -n "$ANDROID_KEY_ALIAS"
-          test -n "$ANDROID_KEY_PASSWORD"
-          KEYSTORE_PATH="$RUNNER_TEMP/ai-wrong-notebook-release.jks"
-          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
-          printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=%s\nstoreFile=%s\n' \
-            "$ANDROID_KEYSTORE_PASSWORD" \
-            "$ANDROID_KEY_PASSWORD" \
-            "$ANDROID_KEY_ALIAS" \
-            "$KEYSTORE_PATH" > android/key.properties
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ] && [ -n "$ANDROID_KEYSTORE_PASSWORD" ] && [ -n "$ANDROID_KEY_ALIAS" ] && [ -n "$ANDROID_KEY_PASSWORD" ]; then
+            KEYSTORE_PATH="$RUNNER_TEMP/ai-wrong-notebook-release.jks"
+            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+            printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=%s\nstoreFile=%s\n' \
+              "$ANDROID_KEYSTORE_PASSWORD" \
+              "$ANDROID_KEY_PASSWORD" \
+              "$ANDROID_KEY_ALIAS" \
+              "$KEYSTORE_PATH" > android/key.properties
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "未配置签名 secrets，产物将使用 debug 签名（可直接安装，不能上架应用市场）。"
+          fi
 
       - run: flutter pub get
 
@@ -47,6 +50,7 @@ jobs:
         run: flutter build appbundle --release
 
       - name: Verify APK signing certificate
+        if: steps.signing.outputs.available == 'true'
         run: |
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -path '*/apksigner' -type f | sort -V | tail -1)"
           "$APKSIGNER" verify --verbose --print-certs build/app/outputs/flutter-apk/app-release.apk | tee /tmp/apksigner.txt

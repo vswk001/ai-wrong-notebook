@@ -389,14 +389,19 @@ class AiAnalysisService {
             'generationConfig': {'maxOutputTokens': 512},
           },
         );
-        final candidates =
-            geminiResponse.data?['candidates'] as List? ?? const [];
-        final geminiText = candidates.isNotEmpty &&
-                candidates.first is Map
-            ? ((((candidates.first as Map)['content'] as Map?)?['parts']
-                    as List?)?.first as Map?)?['text']
-          : null;
-        if (geminiText is! String || geminiText.trim().isEmpty) {
+        String? geminiText;
+        final dynamic geminiData = geminiResponse.data;
+        final dynamic candidates =
+            geminiData is Map ? geminiData['candidates'] : null;
+        if (candidates is List && candidates.isNotEmpty && candidates.first is Map) {
+          final dynamic content = (candidates.first as Map)['content'];
+          final dynamic parts = content is Map ? content['parts'] : null;
+          if (parts is List && parts.isNotEmpty && parts.first is Map) {
+            final dynamic text = (parts.first as Map)['text'];
+            if (text is String) geminiText = text;
+          }
+        }
+        if (geminiText == null || geminiText.trim().isEmpty) {
           throw const AiAnalysisException(
               '测试通过但模型未返回文本内容，正式解析可能失败，请更换模型');
         }

@@ -28,7 +28,7 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           if [ -n "$ANDROID_KEYSTORE_BASE64" ] && [ -n "$ANDROID_KEYSTORE_PASSWORD" ] && [ -n "$ANDROID_KEY_ALIAS" ] && [ -n "$ANDROID_KEY_PASSWORD" ]; then
-            KEYSTORE_PATH="$RUNNER_TEMP/ai-wrong-notebook-release.jks"
+            KEYSTORE_PATH="$RUNNER_TEMP/ai-wrong-notebook-release.p12"
             printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
             printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=%s\nstoreFile=%s\n' \
               "$ANDROID_KEYSTORE_PASSWORD" \
@@ -54,7 +54,7 @@ jobs:
         run: |
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -path '*/apksigner' -type f | sort -V | tail -1)"
           "$APKSIGNER" verify --verbose --print-certs build/app/outputs/flutter-apk/app-release.apk | tee /tmp/apksigner.txt
-          grep -qi 'certificate SHA-256 digest: 25862f0436894d64bf32e54b46ff11711ee76a36af807959a68f76e989885e60' /tmp/apksigner.txt
+          grep -qi 'certificate SHA-256 digest: ffcb49ce988eb102b727d0f6f66f37794f48dbf1e7556e20426add70aaaa288f' /tmp/apksigner.txt
 
       - name: Create APK archive
         run: |

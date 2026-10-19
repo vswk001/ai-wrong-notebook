@@ -35,6 +35,10 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         multiDexEnabled = true
+        ndk {
+            // PaddleOCR(RapidOcr) AAR 只带 v7a/v8a/x86；排除 x86 控制包体
+            abiFilters += listOf("armeabi-v7a", "arm64-v8a")
+        }
     }
 
     // CI 等没有签名密钥的环境回退 debug 签名，保证 APK 可构建可安装；
@@ -77,4 +81,6 @@ flutter {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
+    // 离线 OCR（PaddleOCR v3 模型，RapidOcr onnxruntime 封装，内置 assets 模型）
+    implementation(files("libs/OcrLibrary-1.3.0-release.aar"))
 }

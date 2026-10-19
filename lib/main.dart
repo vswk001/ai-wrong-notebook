@@ -12,6 +12,7 @@ import 'package:smart_wrong_notebook/src/data/repositories/drift_analysis_job_re
 import 'package:smart_wrong_notebook/src/data/local/app_database.dart';
 import 'package:smart_wrong_notebook/src/data/remote/ai/ai_analysis_service.dart';
 import 'package:smart_wrong_notebook/src/data/services/app_analysis_job_runner.dart';
+import 'package:smart_wrong_notebook/src/data/services/paddle_ocr_service.dart';
 import 'package:smart_wrong_notebook/src/data/services/ai_learning_task_coordinator.dart';
 import 'package:smart_wrong_notebook/src/data/services/question_analysis_coordinator.dart';
 import 'package:smart_wrong_notebook/src/domain/services/analysis_job_queue_executor.dart';
@@ -55,6 +56,7 @@ void main() async {
       aiService,
       questionRepository: questionRepo,
       analysisJobRepository: analysisJobRepo,
+      ocrTextSource: PaddleOcrChannelService(),
     ),
   );
   final questionAnalysisCoordinator = QueuedQuestionAnalysisCoordinator(

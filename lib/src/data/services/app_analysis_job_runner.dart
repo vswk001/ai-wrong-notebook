@@ -12,17 +12,22 @@ import 'package:smart_wrong_notebook/src/domain/repositories/analysis_job_reposi
 import 'package:smart_wrong_notebook/src/domain/services/analysis_job_queue_executor.dart';
 import 'package:smart_wrong_notebook/src/domain/services/exercise_round_service.dart';
 
+import 'package:smart_wrong_notebook/src/data/services/paddle_ocr_service.dart';
+
 class AppAnalysisJobRunner implements AnalysisJobRunner {
   const AppAnalysisJobRunner(
     this._service, {
     QuestionRepository? questionRepository,
     AnalysisJobRepository? analysisJobRepository,
+    OcrTextSource? ocrTextSource,
   })  : _questionRepository = questionRepository,
-        _analysisJobRepository = analysisJobRepository;
+        _analysisJobRepository = analysisJobRepository,
+        _ocrTextSource = ocrTextSource;
 
   final AiAnalysisService _service;
   final QuestionRepository? _questionRepository;
   final AnalysisJobRepository? _analysisJobRepository;
+  final OcrTextSource? _ocrTextSource;
 
   @override
   Future<String> run(AnalysisJobExecutionContext context) async {
@@ -73,10 +78,27 @@ class AppAnalysisJobRunner implements AnalysisJobRunner {
   }
 
   Future<String> _runExtraction(Map<String, dynamic> payload) async {
+    final imagePath = payload['imagePath'] as String? ?? '';
+    var textHint = payload['textHint'] as String? ?? '';
+    var isOcrHint = false;
+    // 先用设备端 PaddleOCR 逐字识别，AI 提取以它为基准，保证题干与原图一致。
+    final ocrSource = _ocrTextSource;
+    if (ocrSource != null && imagePath.isNotEmpty) {
+      try {
+        final ocrText = await ocrSource.recognize(imagePath);
+        if (ocrText != null && ocrText.trim().isNotEmpty) {
+          textHint = ocrText.trim();
+          isOcrHint = true;
+        }
+      } catch (_) {
+        // OCR 失败时退回纯 AI 视觉识别，不阻塞流程。
+      }
+    }
     final extraction = await _service.extractQuestionStructure(
       subjectName: payload['subjectName'] as String? ?? '',
-      imagePath: payload['imagePath'] as String? ?? '',
-      textHint: payload['textHint'] as String? ?? '',
+      imagePath: imagePath,
+      textHint: textHint,
+      isOcrHint: isOcrHint,
     );
     return jsonEncode(extraction.toJson());
   }

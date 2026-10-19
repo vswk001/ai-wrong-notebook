@@ -505,6 +505,7 @@ class AiAnalysisService {
     required String subjectName,
     required String imagePath,
     String textHint = '',
+    bool isOcrHint = false,
   }) async {
     debugPrint('[AiAnalysisService] extractQuestionStructure called');
 
@@ -515,7 +516,9 @@ class AiAnalysisService {
         config: config,
         systemPrompt: await _loadExtractionSystemPrompt(),
         prompt: _buildExtractionPrompt(
-            subjectName: subjectName, textHint: textHint),
+            subjectName: subjectName,
+            textHint: textHint,
+            isOcrHint: isOcrHint),
         imageBytes: imageBytes,
         maxTokens: 2800,
         imageDetail: 'auto',
@@ -2371,6 +2374,7 @@ class AiAnalysisService {
   String _buildExtractionPrompt({
     required String subjectName,
     required String textHint,
+    bool isOcrHint = false,
   }) {
     final buffer = StringBuffer();
     buffer.writeln('请先做题目结构化提取。');
@@ -2380,9 +2384,18 @@ class AiAnalysisService {
     }
     if (textHint.isNotEmpty) {
       buffer.writeln();
-      buffer.writeln('用户已有文本提示：');
-      buffer.writeln(textHint);
-      buffer.writeln('文本提示可能来自 OCR 或上次整理，只能作参考；图片中的图形、标注和区域关系必须以原图为准。');
+      if (isOcrHint) {
+        buffer.writeln('设备端 PaddleOCR 对本图片的逐字识别结果（已按阅读顺序排列，含图中的手写填入内容）：');
+        buffer.writeln(textHint);
+        buffer.writeln('【最高优先级规则】extractedQuestionText 必须以上面 OCR 文本为基准逐字整理：');
+        buffer.writeln('- 只允许修正 OCR 明显的单字识别错误，并把行序整理为自然阅读顺序');
+        buffer.writeln('- 严禁意译、改写、概括、增删内容；严禁把括号/方格里的内容替换成提示语');
+        buffer.writeln('- 图片中的图形、连线、标注仍需按系统指令输出 diagram 围栏');
+      } else {
+        buffer.writeln('用户已有文本提示：');
+        buffer.writeln(textHint);
+        buffer.writeln('文本提示可能来自 OCR 或上次整理，只能作参考；图片中的图形、标注和区域关系必须以原图为准。');
+      }
     }
     buffer.writeln();
     buffer.writeln(
@@ -6366,6 +6379,7 @@ class _FakeAiAnalysisService extends AiAnalysisService {
     required String subjectName,
     required String imagePath,
     String textHint = '',
+    bool isOcrHint = false,
   }) async {
     final normalized = textHint.isNotEmpty ? textHint : '示例题目文本';
     final splitResult = await splitQuestionCandidates(

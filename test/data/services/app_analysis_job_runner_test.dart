@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_wrong_notebook/src/data/remote/ai/ai_analysis_service.dart';
 import 'package:smart_wrong_notebook/src/data/repositories/settings_repository.dart';
 import 'package:smart_wrong_notebook/src/data/services/app_analysis_job_runner.dart';
+import 'package:smart_wrong_notebook/src/data/services/paddle_ocr_service.dart';
 import 'package:smart_wrong_notebook/src/domain/models/ai_task_spec.dart';
 import 'package:smart_wrong_notebook/src/domain/models/analysis_job.dart';
 import 'package:smart_wrong_notebook/src/domain/models/analysis_result.dart';
@@ -12,16 +13,18 @@ import 'package:smart_wrong_notebook/src/domain/models/subject.dart';
 import 'package:smart_wrong_notebook/src/domain/services/ai_route_resolver.dart';
 import 'package:smart_wrong_notebook/src/domain/services/analysis_job_queue_executor.dart';
 
+const _kAnalysisResult = AnalysisResult(
+  subject: Subject.math,
+  finalAnswer: 'x=2',
+  steps: <String>['移项'],
+  aiTags: <String>['方程'],
+  knowledgePoints: <String>['等式性质'],
+  mistakeReason: '移项错误',
+  studyAdvice: '检查符号',
+);
+
 void main() {
-  const result = AnalysisResult(
-    subject: Subject.math,
-    finalAnswer: 'x=2',
-    steps: <String>['移项'],
-    aiTags: <String>['方程'],
-    knowledgePoints: <String>['等式性质'],
-    mistakeReason: '移项错误',
-    studyAdvice: '检查符号',
-  );
+  const result = _kAnalysisResult;
 
   TestAiAnalysisService service() => TestAiAnalysisService(
         settingsRepository: InMemorySettingsRepository(),
@@ -130,4 +133,105 @@ void main() {
     expect(updated.analysisResult?.finalAnswer, 'x=2');
     expect(updated.savedExercises, isEmpty);
   });
+
+  test('extraction job prefers device OCR text as verbatim hint', () async {
+    final hints = <String>[];
+    final ocrFlags = <bool>[];
+    final recording = _HintRecordingService(hints, ocrFlags);
+    final runner = AppAnalysisJobRunner(
+      recording,
+      ocrTextSource: _FakeOcrSource('OCR 逐字文本'),
+    );
+    final extractionJob = job(
+      id: 'question-1:extraction',
+      type: AiTaskType.extraction,
+      payloadJson: jsonEncode(<String, dynamic>{
+        'subjectName': 'math',
+        'imagePath': '/tmp/question.jpg',
+        'textHint': '旧提示',
+      }),
+    );
+
+    await runner.run(AnalysisJobExecutionContext(
+      job: extractionJob,
+      dependencyResults: const <String, String>{},
+    ));
+
+    expect(recording.extractionCallCount, 1);
+    expect(hints.single, 'OCR 逐字文本');
+    expect(ocrFlags.single, isTrue);
+  });
+
+  test('extraction falls back to payload hint when OCR unavailable',
+      () async {
+    final hints = <String>[];
+    final ocrFlags = <bool>[];
+    final recording = _HintRecordingService(hints, ocrFlags);
+    final runner = AppAnalysisJobRunner(
+      recording,
+      ocrTextSource: _FakeOcrSource(null),
+    );
+    final extractionJob = job(
+      id: 'question-1:extraction',
+      type: AiTaskType.extraction,
+      payloadJson: jsonEncode(<String, dynamic>{
+        'subjectName': 'math',
+        'imagePath': '/tmp/question.jpg',
+        'textHint': '旧提示',
+      }),
+    );
+
+    await runner.run(AnalysisJobExecutionContext(
+      job: extractionJob,
+      dependencyResults: const <String, String>{},
+    ));
+
+    expect(recording.extractionCallCount, 1);
+    expect(hints.single, '旧提示');
+    expect(ocrFlags.single, isFalse);
+  });
+}
+
+class _HintRecordingService extends TestAiAnalysisService {
+  _HintRecordingService(
+    this.hints,
+    this.ocrFlags,
+  ) : super(
+          settingsRepository: InMemorySettingsRepository(),
+          extractionResult: const AiQuestionExtractionResult(
+            extractedQuestionText: '识别题干',
+            normalizedQuestionText: '规范题干',
+            subject: Subject.math,
+          ),
+          analysisResultValue: _kAnalysisResult,
+        );
+
+  final List<String> hints;
+  final List<bool> ocrFlags;
+
+  @override
+  Future<AiQuestionExtractionResult> extractQuestionStructure({
+    required String subjectName,
+    required String imagePath,
+    String textHint = '',
+    bool isOcrHint = false,
+  }) async {
+    hints.add(textHint);
+    ocrFlags.add(isOcrHint);
+    return super.extractQuestionStructure(
+      subjectName: subjectName,
+      imagePath: imagePath,
+      textHint: textHint,
+      isOcrHint: isOcrHint,
+    );
+  }
+}
+
+class _FakeOcrSource implements OcrTextSource {
+  const _FakeOcrSource(this.text);
+
+  final String? text;
+
+  @override
+  Future<String?> recognize(String imagePath) async => text;
 }

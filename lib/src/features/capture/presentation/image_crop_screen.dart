@@ -59,20 +59,30 @@ class _ImageCropScreenState extends ConsumerState<ImageCropScreen> {
 
       if (!mounted) return;
 
-      if (croppedFile != null) {
-        // Save cropped image
-        final storage = ref.read(imageStorageServiceProvider);
-        final savedPath = await storage.saveImage(File(croppedFile.path));
-
-        // Create new question with cropped image path
-        final newRecord = QuestionRecord.draft(
-          id: current.id,
-          imagePath: savedPath,
-          subject: current.subject,
-          recognizedText: '',
-        ).copyWith(contentStatus: ContentStatus.processing);
-        ref.read(currentQuestionProvider.notifier).state = newRecord;
+      if (croppedFile == null) {
+        // 用户在裁剪工具中点了取消/叉号：返回上一页，不开始分析。
+        if (mounted) {
+          if (context.canPop()) {
+            context.pop();
+          } else {
+            context.go('/');
+          }
+        }
+        return;
       }
+
+      // Save cropped image
+      final storage = ref.read(imageStorageServiceProvider);
+      final savedPath = await storage.saveImage(File(croppedFile.path));
+
+      // Create new question with cropped image path
+      final newRecord = QuestionRecord.draft(
+        id: current.id,
+        imagePath: savedPath,
+        subject: current.subject,
+        recognizedText: '',
+      ).copyWith(contentStatus: ContentStatus.processing);
+      ref.read(currentQuestionProvider.notifier).state = newRecord;
 
       if (mounted) {
         context.push('/analysis/loading');

@@ -6469,6 +6469,7 @@ class TestAiAnalysisService extends AiAnalysisService {
     required String subjectName,
     required String imagePath,
     String textHint = '',
+    bool isOcrHint = false,
   }) async {
     extractionCallCount++;
     return extractionResult;

@@ -2216,7 +2216,7 @@ class AiAnalysisService {
 重要规则：
 - 本次只做本题解析，不生成额外练习题，不输出与练习题相关的内容
 - 优先使用用户已确认的题目文本；如果输入包含图片且文本不足，必须直接根据图片理解题目并解题
-- reconstructedQuestionText 必须整理出完整题干；图形题应基于读图理解补全已知条件和求解目标
+- reconstructedQuestionText 必须整理出完整题干，且必须是"空白待重做的原题"：括号/方格/横线上手写填入的答案一律剔除还原为空白，红笔批改痕迹忽略；严禁把学生已写的答案或推算出的算式写进题干；图形题应基于读图理解补全已知条件和求解目标
 - 答案必须准确、有条理
 - finalAnswer 只能填写题目最终要求的答案，不要填写中间量；必须与 steps 最后一条最终结论一致
 - finalAnswerDerivation 必须用一句话说明最终答案来源，且必须与 finalAnswer 一致；如果 steps、mistakeReason 中出现其他中间答案，不得把中间答案写入 finalAnswer
@@ -2273,9 +2273,9 @@ class AiAnalysisService {
 
 重要规则：
 - 必须以图片内容为准，不要虚构缺失内容
-- extractedQuestionText 保留尽量忠实的识别结果
-- normalizedQuestionText 输出更适合展示、搜索和后续 AI 分析的规范文本
-- 【逐字一致——最高优先级】normalizedQuestionText 必须与 extractedQuestionText 逐字对应：只允许修正明显的 OCR 识别错误、整理换行与标点、把公式规范为 LaTeX；严禁改写、意译、概括、增删任何条件、数字、单位或选项。导出试卷时将直接用该文本替代原图，任何改写都会导致题目与原图不一致
+- extractedQuestionText 保留尽量忠实的识别结果（含学生手写填入的答案，供错因分析）
+- normalizedQuestionText 输出"空白待重做的原题"，用于展示、搜索、后续分析和导出试卷
+- 【空白原题——最高优先级】normalizedQuestionText 的印刷文字必须与 extractedQuestionText 逐字一致：严禁改写、意译、概括、增删任何条件、数字、单位或选项；严禁把手写答案或推算出的算式写进题干（例如学生填了 4、4、8，不得在题干写出 112×4=448）；严禁自拟题目中没有的要求语（如"计算，按要求分解填空"）。导出试卷时将直接用该文本替代原图，任何增删都会导致题目与原图不一致
 - 如果图片无法识别出有效题目，两个文本字段都返回空字符串
 - 如果内容包含 LaTeX，必须先生成合法 JSON：所有 LaTeX 反斜杠都写成 JSON 转义形式，例如 \\frac、\\times、\\(x\\)、\\[x\\]
 - 方程组或多行公式必须使用 KaTeX 兼容的 aligned 或 cases 环境，例如 \\begin{cases} x+y=5 \\\\ x-y=1 \\end{cases}，不要使用 \\newline
@@ -2293,7 +2293,7 @@ class AiAnalysisService {
   6. JSON 转义规则：反斜杠双写，\ → \\，\\ → \\\\。换行用 \\n。cases 环境行分隔符 \\ → \\\\
      - 示例：\\(x^2=4\)\\n  所以 x=\\pm 2  // JSON 中 \\n = 换行，\\pi = \pi，\\pm = \pm
      - 示例：\[\\begin{cases} x+y=5 \\\\ x-y=1 \\end{cases}\]  // \\\\ 在 JSON 中表示 LaTeX 换行符 \\
-- 【图形结构化还原——重要】若图中含几何图形、方格图（如铺地锦/格子乘法）、线段图、连线分解图（数字/方格用线或箭头连接到填空括号）、树状图、统计图、坐标系图形等任何印刷图形结构，必须在 extractedQuestionText 文本末尾额外附加一个 ```diagram 围栏，用 JSON 忠实还原图形。坐标取 0~1 归一化（左上角为原点，x 向右 y 向下）。可用元素：
+- 【图形结构化还原——重要】若图中含几何图形、方格图（如铺地锦/格子乘法）、线段图、连线分解图（数字/方格用线或箭头连接到填空括号）、树状图、统计图、坐标系图形等任何印刷图形结构，必须在 extractedQuestionText 和 normalizedQuestionText 文本末尾各附加一个内容相同的 ```diagram 围栏，用 JSON 忠实还原图形。坐标取 0~1 归一化（左上角为原点，x 向右 y 向下）。可用元素：
   - {"type":"line","x1":0.1,"y1":0.2,"x2":0.9,"y2":0.2,"style":"solid"}（style 可选 solid/dashed）
   - {"type":"polygon","points":[[0.1,0.1],[0.9,0.1],[0.9,0.5],[0.1,0.5]],"filled":false}
   - {"type":"text","text":"14","x":0.3,"y":0.25,"fontSize":15}
@@ -2304,11 +2304,12 @@ class AiAnalysisService {
   - {"type":"rightAngle","x":0.5,"y":0.5,"size":0.03}
   - {"type":"tickMark","x1":0.2,"y1":0.3,"x2":0.4,"y2":0.3,"ticks":1}
   示例 1——铺地锦（格子乘法）图：外框大矩形，竖线均分为若干格，每格一条自左下到右上的斜线，每格斜线上、下方各一个数字，框上方一排乘数数字、框右侧一个乘数数字。必须按图中真实格子数与数字忠实还原，位置与原图一致。
-  示例 2——位值分解连线图：上方一排数字（如 1 1 2）和乘数（如 ×4），下方几个方格（polygon 方框）内写数字，数字与方格之间用 line 连线/箭头连接，方格右侧再引出 line 连线到题目文字行；连线与方格必须按原图位置画，图中数字用 text 元素标在对应位置。
+  示例 2——位值分解连线图：上方一排印刷数字（如 1 1 2）和乘数（如 ×4），下方几个空白方格（polygon 方框，内部留空，不得写学生手写的答案数字），方格与上方数字之间按原图用 line 连线/箭头连接，方格右侧再引出 line 连线到空括号行；图中只允许 text 标注印刷数字，位置必须与原图一致。
+  【diagram 元素排版硬性要求】元素之间禁止相互重叠：text 不得压在 polygon/line 上，连线不得穿过 text 和方框；同一行元素之间留出水平间距，做不到不重叠时优先缩小字号（fontSize 降到 12 以下）或拉开归一化坐标。
   示例 3——条形统计图：横轴与纵轴各一条 line（纵轴自下而上），每根柱子用一个 filled polygon 画，柱顶 text 标数值，横轴下方 text 标类别名，纵轴刻度值用 text 小字号标注。
   示例 4——折线统计图：横轴与纵轴 line；每个数据点用 point 或小 polygon 标记；相邻数据点之间用 line 连接；每个数据点旁 text 标数值，横轴下方 text 标类别。
   示例 5——扇形统计图：同一个圆心 (cx,cy) 和半径 r，多个 filled 的 arc 元素（startAngle 与 sweepAngle 顺次衔接、互不重叠，角度按原图比例）；每块扇形外侧用 text 标注名称与百分比；若有图例也用 text 标出。
-  手写内容处理：红笔批改、圈划、叉、评分等痕迹忽略；但印刷图形中手写填入的数字/答案属于题目内容，必须保留在题干文本中，并作为 text 元素画进 diagram。
+  手写内容处理：红笔批改、圈划、叉、评分等痕迹一律忽略；印刷图形、括号、方格、横线上手写填入的数字/答案是学生已做的内容，必须剔除——extractedQuestionText 保留手写填入的原始识别结果（供错因分析），normalizedQuestionText 与 diagram 围栏一律输出剔除后的空白版：括号还原为 "(  )"、方格留空、横线留空，diagram 中不得出现手写数字的 text 元素。
   围栏内容顶层必须是 {"elements":[...]}，且 elements 必须包含还原图形所需的全部元素，禁止输出空数组。
   纯文字题不要输出 diagram 围栏；围栏内 JSON 的英文引号必须转义为 \"。
 返回格式必须严格如下（不要包含 markdown 代码块标记，使用纯 JSON）：
@@ -2395,13 +2396,14 @@ class AiAnalysisService {
     if (textHint.isNotEmpty) {
       buffer.writeln();
       if (isOcrHint) {
-        buffer.writeln('设备端 PaddleOCR 对本图片的逐字识别结果（已按阅读顺序排列，含图中的手写填入内容）：');
+        buffer.writeln('设备端 PaddleOCR 对本图片的逐字识别结果（已按阅读顺序排列；包含印刷题目文字和学生手写填入的答案）：');
         buffer.writeln(textHint);
-        buffer.writeln('【最高优先级规则】extractedQuestionText 必须以上面 OCR 文本为基准逐字整理：');
+        buffer.writeln('【最高优先级规则】extractedQuestionText 必须以上面 OCR 文本为基准逐字整理（保留手写填入内容，供错因分析）：');
         buffer.writeln('- 只允许修正 OCR 明显的单字识别错误，并把行序整理为自然阅读顺序');
         buffer.writeln('- 严禁意译、改写、概括、增删内容；严禁把括号/方格里的内容替换成提示语');
+        buffer.writeln('- normalizedQuestionText 必须剔除手写填入的答案，还原为空白待填的原题（括号/方格/横线留空）；印刷文字与 extractedQuestionText 逐字一致，严禁补充推算出的算式或自拟要求语');
         buffer.writeln('- 题目原文或 OCR 文本里的英文双引号 " 在 JSON 输出中必须转义为 \\"，或改写为中文引号“”');
-        buffer.writeln('- 图片中的图形、连线、标注仍需按系统指令输出 diagram 围栏');
+        buffer.writeln('- 图片中的图形、连线、标注仍需按系统指令输出 diagram 围栏（空白版，方格/括号内不含手写数字）');
       } else {
         buffer.writeln('用户已有文本提示：');
         buffer.writeln(textHint);
@@ -2412,7 +2414,7 @@ class AiAnalysisService {
     buffer.writeln(
         '若题目包含图形/示意图，请先忠实描述原图中真实看到的图形类型、边界、标注和目标区域；看不清就写不确定，不要猜成梯形/半圆/扇形等特定题型。');
     buffer.writeln(
-        '【必须检查】若图片中包含任何图形（几何图、方格图、线段图、连线分解图、树状图、统计图、坐标系等），必须在 extractedQuestionText 的题目文字末尾附加一个 ```diagram 围栏，按系统指令用 JSON 元素忠实还原图形：图形的形状、分隔线、斜线、标注数字及其位置都要与原图一致；围栏内 JSON 的英文引号转义为 \\"。没有图形则不要附加。');
+        '【必须检查】若图片中包含任何图形（几何图、方格图、线段图、连线分解图、树状图、统计图、坐标系等），必须在 extractedQuestionText 和 normalizedQuestionText 的题目文字末尾各附加一个内容相同的 ```diagram 围栏，按系统指令用 JSON 元素忠实还原图形（空白版，不含手写填入数字）：图形的形状、分隔线、斜线、标注数字及其位置都要与原图一致；围栏内 JSON 的英文引号转义为 \\"。没有图形则不要附加。');
     buffer.writeln(
         '请输出 subject、extractedQuestionText、normalizedQuestionText。方程组或多行公式请使用 aligned/cases 环境，不要使用 \\newline。');
     return buffer.toString();
@@ -2422,10 +2424,12 @@ class AiAnalysisService {
   String buildExtractionPromptForTest({
     required String subjectName,
     required String textHint,
+    bool isOcrHint = false,
   }) {
     return _buildExtractionPrompt(
       subjectName: subjectName,
       textHint: textHint,
+      isOcrHint: isOcrHint,
     );
   }
 

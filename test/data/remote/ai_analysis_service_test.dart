@@ -76,8 +76,47 @@ void _registerUnknownSubjectPromptTests() {
   });
 }
 
+void _registerBlankQuestionPromptTests() {
+  test('OCR extraction prompt keeps handwriting in extracted but blanks it '
+      'in normalized question', () {
+    final service = AiAnalysisService(
+      settingsRepository: InMemorySettingsRepository(),
+    );
+
+    final ocrPrompt = service.buildExtractionPromptForTest(
+      subjectName: Subject.math.name,
+      textHint: '二、填空。\n1.填一填。(2)×(4)=(8)',
+      isOcrHint: true,
+    );
+
+    // extracted 保留手写填入内容供错因分析
+    expect(ocrPrompt, contains('保留手写填入内容，供错因分析'));
+    // normalized 剔除手写，还原空白原题
+    expect(ocrPrompt, contains('必须剔除手写填入的答案'));
+    expect(ocrPrompt, contains('空白待填的原题'));
+    // 禁止把推算算式/自拟要求语写进题干
+    expect(ocrPrompt, contains('严禁补充推算出的算式或自拟要求语'));
+    // diagram 输出空白版
+    expect(ocrPrompt, contains('方格/括号内不含手写数字'));
+  });
+
+  test('non-OCR extraction prompt defers to image as ground truth', () {
+    final service = AiAnalysisService(
+      settingsRepository: InMemorySettingsRepository(),
+    );
+
+    final prompt = service.buildExtractionPromptForTest(
+      subjectName: Subject.math.name,
+      textHint: '用户手输的题目文本',
+    );
+
+    expect(prompt, contains('必须以原图为准'));
+  });
+}
+
 void main() {
   _registerUnknownSubjectPromptTests();
+  _registerBlankQuestionPromptTests();
   _registerJsonRepairTests();
 
   test('service generates exercises from saved question without image or OCR',

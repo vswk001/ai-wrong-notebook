@@ -89,7 +89,10 @@ class QuestionAnalysisPipeline {
 
     final shouldUseImageForAnalysis =
         shouldAnalyzeImageDirectly || _shouldUseImageForAnalysis(working);
-    final textForAnalysis = shouldUseImageForAnalysis
+    // 分析输入用 extractedQuestionText（忠实转录，含手写已填答案），
+    // 错因分析需要知道学生写了什么；normalizedQuestionText 是剔除手写
+    // 后的空白原题，仅供展示与出卷。
+    final textForAnalysis = working.extractedQuestionText.trim().isNotEmpty
         ? working.extractedQuestionText
         : working.correctedText;
     final analysis = firstSuccessfulCandidate?.analysisResult ??

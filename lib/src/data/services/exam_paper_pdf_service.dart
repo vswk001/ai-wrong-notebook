@@ -94,6 +94,26 @@ class ExamPaperPdfService {
         font: font, fontSize: baseFontSize + 1, fontWeight: pw.FontWeight.bold);
 
     pw.Widget questionBlock(int index, ExamPaperEntry entry, pw.ImageProvider? image) {
+      if (image != null) {
+        // 原题带图：只放原图（题干即图片，文字转写反而引入不一致）。
+        return pw.Padding(
+          padding: const pw.EdgeInsets.only(bottom: 10),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: <pw.Widget>[
+              pw.Text('${index + 1}.', style: baseStyle),
+              pw.Container(
+                margin: const pw.EdgeInsets.only(top: 4, left: 10),
+                constraints: pw.BoxConstraints(
+                  maxWidth: pageFormat.availableWidth * 0.92,
+                  maxHeight: pageFormat.availableHeight * 0.5,
+                ),
+                child: pw.Image(image, fit: pw.BoxFit.contain),
+              ),
+            ],
+          ),
+        );
+      }
       return pw.Padding(
         padding: const pw.EdgeInsets.only(bottom: 10),
         child: pw.Column(
@@ -103,15 +123,6 @@ class ExamPaperPdfService {
               '${index + 1}. ${MathTextConverter.toReadable(entry.stem)}',
               style: baseStyle,
             ),
-            if (image != null)
-              pw.Container(
-                margin: const pw.EdgeInsets.only(top: 6, left: 12),
-                constraints: pw.BoxConstraints(
-                  maxWidth: pageFormat.availableWidth * 0.55,
-                  maxHeight: pageFormat.availableHeight * 0.32,
-                ),
-                child: pw.Image(image, fit: pw.BoxFit.contain),
-              ),
           ],
         ),
       );

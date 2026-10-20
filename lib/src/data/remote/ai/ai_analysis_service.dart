@@ -1372,6 +1372,11 @@ class AiAnalysisService {
   }
 
   @visibleForTesting
+  Map<String, dynamic> parseResponseJsonForTest(String content) {
+    return _parseResponseJson(content);
+  }
+
+  @visibleForTesting
   AnalysisResult applyConsistencyVerificationForTest(
     AnalysisResult analysis,
     String verificationContent,
@@ -2299,7 +2304,11 @@ class AiAnalysisService {
   - {"type":"tickMark","x1":0.2,"y1":0.3,"x2":0.4,"y2":0.3,"ticks":1}
   示例 1——铺地锦（格子乘法）图：外框大矩形，竖线均分为若干格，每格一条自左下到右上的斜线，每格斜线上、下方各一个数字，框上方一排乘数数字、框右侧一个乘数数字。必须按图中真实格子数与数字忠实还原，位置与原图一致。
   示例 2——位值分解连线图：上方一排数字（如 1 1 2）和乘数（如 ×4），下方几个方格（polygon 方框）内写数字，数字与方格之间用 line 连线/箭头连接，方格右侧再引出 line 连线到题目文字行；连线与方格必须按原图位置画，图中数字用 text 元素标在对应位置。
+  示例 3——条形统计图：横轴与纵轴各一条 line（纵轴自下而上），每根柱子用一个 filled polygon 画，柱顶 text 标数值，横轴下方 text 标类别名，纵轴刻度值用 text 小字号标注。
+  示例 4——折线统计图：横轴与纵轴 line；每个数据点用 point 或小 polygon 标记；相邻数据点之间用 line 连接；每个数据点旁 text 标数值，横轴下方 text 标类别。
+  示例 5——扇形统计图：同一个圆心 (cx,cy) 和半径 r，多个 filled 的 arc 元素（startAngle 与 sweepAngle 顺次衔接、互不重叠，角度按原图比例）；每块扇形外侧用 text 标注名称与百分比；若有图例也用 text 标出。
   手写内容处理：红笔批改、圈划、叉、评分等痕迹忽略；但印刷图形中手写填入的数字/答案属于题目内容，必须保留在题干文本中，并作为 text 元素画进 diagram。
+  围栏内容顶层必须是 {"elements":[...]}，且 elements 必须包含还原图形所需的全部元素，禁止输出空数组。
   纯文字题不要输出 diagram 围栏；围栏内 JSON 的英文引号必须转义为 \"。
 返回格式必须严格如下（不要包含 markdown 代码块标记，使用纯 JSON）：
 {
@@ -2390,6 +2399,7 @@ class AiAnalysisService {
         buffer.writeln('【最高优先级规则】extractedQuestionText 必须以上面 OCR 文本为基准逐字整理：');
         buffer.writeln('- 只允许修正 OCR 明显的单字识别错误，并把行序整理为自然阅读顺序');
         buffer.writeln('- 严禁意译、改写、概括、增删内容；严禁把括号/方格里的内容替换成提示语');
+        buffer.writeln('- 题目原文或 OCR 文本里的英文双引号 " 在 JSON 输出中必须转义为 \\"，或改写为中文引号“”');
         buffer.writeln('- 图片中的图形、连线、标注仍需按系统指令输出 diagram 围栏');
       } else {
         buffer.writeln('用户已有文本提示：');
@@ -2783,11 +2793,12 @@ class AiAnalysisService {
 
     // 模型偶发生成不合法 JSON：LaTeX 反斜杠未转义、字符串里裸英文引号
     // （例如 "3. "铺地锦"是…"）、字符串内裸换行。按多种修复组合依次尝试。
+    final fenceEscaped = _escapeDiagramFenceQuotes(jsonStr);
     final baseCandidates = <String>[
       jsonStr,
       _repairInvalidJsonStringEscapes(jsonStr),
-      _escapeUnescapedInnerQuotes(jsonStr),
-      _repairInvalidJsonStringEscapes(_escapeUnescapedInnerQuotes(jsonStr)),
+      _escapeUnescapedInnerQuotes(fenceEscaped),
+      _repairInvalidJsonStringEscapes(_escapeUnescapedInnerQuotes(fenceEscaped)),
     ];
     Object? lastError;
     for (final candidate in baseCandidates) {
@@ -2834,20 +2845,7 @@ class AiAnalysisService {
         continue;
       }
       if (char == '"') {
-        var j = i + 1;
-        while (j < jsonStr.length &&
-            (jsonStr[j] == ' ' || jsonStr[j] == '\t')) {
-          j++;
-        }
-        final next = j < jsonStr.length ? jsonStr[j] : '';
-        final looksLikeTerminator = next.isEmpty ||
-            next == ',' ||
-            next == '}' ||
-            next == ']' ||
-            next == ':' ||
-            next == '\n' ||
-            next == '\r';
-        if (looksLikeTerminator) {
+        if (_quoteLooksLikeStringEnd(jsonStr, i)) {
           inString = false;
           result.write(char);
         } else {
@@ -2858,6 +2856,118 @@ class AiAnalysisService {
       result.write(char);
     }
     return result.toString();
+  }
+
+  /// 判断字符串值中位置 [quoteIndex] 的裸引号是否更像字符串结束。
+  /// 除紧跟 , } ] : 或末尾外，还要跨行/跨 token 校验：正文里恰好
+  /// 后面跟逗号（其后是普通文字）或冒号（其后是普通文字）的引号
+  /// 不再被误判为字符串结束。
+  bool _quoteLooksLikeStringEnd(String jsonStr, int quoteIndex) {
+    var i = quoteIndex + 1;
+    while (i < jsonStr.length && (jsonStr[i] == ' ' || jsonStr[i] == '\t')) {
+      i++;
+    }
+    if (i >= jsonStr.length) return true;
+    final next = jsonStr[i];
+    if (next == '}' || next == ']') return true;
+    if (next == '\n' || next == '\r') {
+      var j = i;
+      while (j < jsonStr.length &&
+          (jsonStr[j] == ' ' ||
+              jsonStr[j] == '\t' ||
+              jsonStr[j] == '\n' ||
+              jsonStr[j] == '\r')) {
+        j++;
+      }
+      return j >= jsonStr.length ||
+          jsonStr[j] == ',' ||
+          jsonStr[j] == '}' ||
+          jsonStr[j] == ']' ||
+          jsonStr[j] == ':';
+    }
+    if (next == ',') {
+      var j = i + 1;
+      while (j < jsonStr.length &&
+          (jsonStr[j] == ' ' ||
+              jsonStr[j] == '\t' ||
+              jsonStr[j] == '\n' ||
+              jsonStr[j] == '\r')) {
+        j++;
+      }
+      if (j >= jsonStr.length) return true;
+      return _looksLikeTokenStart(jsonStr[j]);
+    }
+    if (next == ':') {
+      var j = i + 1;
+      while (j < jsonStr.length &&
+          (jsonStr[j] == ' ' || jsonStr[j] == '\t' || jsonStr[j] == '\n' || jsonStr[j] == '\r')) {
+        j++;
+      }
+      if (j >= jsonStr.length) return false;
+      return _looksLikeTokenStart(jsonStr[j]);
+    }
+    return false;
+  }
+
+  bool _looksLikeTokenStart(String char) {
+    return char == '"' ||
+        char == '{' ||
+        char == '[' ||
+        char == '}' ||
+        char == ']' ||
+        char == '-' ||
+        char == 't' ||
+        char == 'f' ||
+        char == 'n' ||
+        (char.codeUnitAt(0) >= 48 && char.codeUnitAt(0) <= 57);
+  }
+
+  /// 模型常把 diagram 等 ``` 围栏整体写进 JSON 字符串值里，且不转义
+  /// 围栏内的英文双引号（围栏内往往又是一段 JSON）。围栏属于字符串
+  /// 内容，先把其中未转义的英文双引号统一转义，再做其它修复。
+  String _escapeDiagramFenceQuotes(String jsonStr) {
+    if (!jsonStr.contains('```')) return jsonStr;
+    final buffer = StringBuffer();
+    var inFence = false;
+    var fenceTicks = 0;
+    var backslashRun = 0;
+    for (var i = 0; i < jsonStr.length; i++) {
+      final char = jsonStr[i];
+      if (char == r'\') {
+        backslashRun++;
+        buffer.write(char);
+        continue;
+      }
+      final escaped = backslashRun.isOdd;
+      backslashRun = 0;
+      if (char == '`' && !escaped) {
+        if (inFence) {
+          fenceTicks++;
+          buffer.write(char);
+          if (fenceTicks == 3) {
+            inFence = false;
+            fenceTicks = 0;
+          }
+          continue;
+        }
+        if (jsonStr.startsWith('```', i)) {
+          inFence = true;
+          fenceTicks = 0;
+          buffer.write('```');
+          i += 2;
+          continue;
+        }
+        buffer.write(char);
+        continue;
+      }
+      if (inFence && char == '"' && !escaped) {
+        buffer.write(r'\"');
+        continue;
+      }
+      buffer.write(char);
+      fenceTicks = 0;
+    }
+    return buffer.toString();
   }
 
   String _stripJsonFence(String content) {

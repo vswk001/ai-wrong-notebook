@@ -204,7 +204,7 @@ class _ExamPaperScreenState extends ConsumerState<ExamPaperScreen> {
                       <Widget>[
                         _choiceRow(
                           '错题原题',
-                          '直接使用录题时的原题',
+                          '整题以拍照原图形式排版（不含文字转写）',
                           source == _ExamSource.original,
                           () => setSheetState(() => source = _ExamSource.original),
                         ),

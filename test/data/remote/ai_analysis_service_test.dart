@@ -78,6 +78,7 @@ void _registerUnknownSubjectPromptTests() {
 
 void main() {
   _registerUnknownSubjectPromptTests();
+  _registerJsonRepairTests();
 
   test('service generates exercises from saved question without image or OCR',
       () async {
@@ -3453,5 +3454,72 @@ data: [DONE]
     expect(exercises.map((exercise) => exercise.id),
         <String>['ai-simple', 'ai-same', 'ai-hard']);
     expect(exercises.every((exercise) => exercise.diagramData != null), isTrue);
+  });
+}
+
+void _registerJsonRepairTests() {
+  final service = AiAnalysisService(
+    settingsRepository: InMemorySettingsRepository(),
+  );
+
+  test('parse repairs unescaped quotes in text and diagram fence', () {
+    // 复现用户截图：模型输出了未转义正文引号 + diagram 围栏内未转义
+    // 引号 + 字符串内裸换行的混合非法 JSON。
+    const content = '''{
+  "subject": "数学",
+  "extractedQuestionText": "3. "铺地锦"是我国古代数学名著《算法统宗》里记载的一种计算乘法的方法。下面是计算 284×23 的铺地锦图。
+
+```diagram
+{"elements":[{"type":"text","text":"284","x":0.12,"y":0.2},{"type":"line","from":[0.1,0.3],"to":[0.6,0.3]}]}
+```",
+  "normalizedQuestionText": "3. 用铺地锦计算 284×23"
+}''';
+
+    final map = service.parseResponseJsonForTest(content);
+    final extracted = map['extractedQuestionText'] as String;
+    expect(extracted, contains('"铺地锦"'));
+    expect(extracted, contains('```diagram'));
+    expect(extracted, contains('"type"'));
+    expect(extracted, isNot(contains(r'\"type\"')));
+    expect(map['subject'], '数学');
+    expect(map['normalizedQuestionText'], '3. 用铺地锦计算 284×23');
+  });
+
+  test('parse keeps quote before mid-sentence newline as content', () {
+    const content = '''{"subject":"数学","extractedQuestionText":"这种古代算法叫做"铺地锦"
+它源自《算法统宗》。","normalizedQuestionText":"铺地锦算法"}''';
+
+    final map = service.parseResponseJsonForTest(content);
+    final extracted = map['extractedQuestionText'] as String;
+    expect(extracted, contains('叫做"铺地锦"'));
+    expect(extracted, contains('它源自'));
+  });
+
+  test('parse does not double-escape already escaped fence quotes', () {
+    const content =
+        '{"subject":"数学","extractedQuestionText":"题目文字。```diagram\\n{\\"elements\\":[{\\"type\\":\\"point\\",\\"label\\":\\"A\\"}]}\\n```","normalizedQuestionText":"题目"}';
+
+    final map = service.parseResponseJsonForTest(content);
+    final extracted = map['extractedQuestionText'] as String;
+    expect(extracted, contains('"type"'));
+    expect(extracted, isNot(contains(r'\"type\"')));
+  });
+
+  test('parse repairs raw latex backslashes together with inner quotes', () {
+    const content =
+        '{"subject":"数学","extractedQuestionText":"计算 \\frac{1}{2} + "三分之一" 的和。","normalizedQuestionText":"分数加法"}';
+
+    final map = service.parseResponseJsonForTest(content);
+    final extracted = map['extractedQuestionText'] as String;
+    expect(extracted, contains(r'\frac{1}{2}'));
+    expect(extracted, contains('"三分之一"'));
+  });
+
+  test('parse keeps valid json untouched', () {
+    const content =
+        '{"subject":"语文","extractedQuestionText":"默写《静夜思》。","normalizedQuestionText":"古诗默写"}';
+
+    final map = service.parseResponseJsonForTest(content);
+    expect(map['extractedQuestionText'], '默写《静夜思》。');
   });
 }

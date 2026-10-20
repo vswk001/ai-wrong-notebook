@@ -258,11 +258,12 @@ class _GeometryPainter extends CustomPainter {
     final startRad = arc.startAngle * math.pi / 180;
     final sweepRad = arc.sweepAngle * math.pi / 180;
     if (arc.filled) {
+      // useCenter=true 画饼式扇形（扇形统计图）；弦式填充不适合统计图。
       c.drawArc(
           rect,
           startRad,
           sweepRad * p,
-          false,
+          true,
           Paint()
             ..color = _color(arc.role).withValues(alpha: 0.12 * p)
             ..style = PaintingStyle.fill);
@@ -472,7 +473,16 @@ class _GeometryDiagram {
 
   static _GeometryDiagram? tryFromJson(Map<String, dynamic> json) {
     try {
-      final rawEls = json['elements'] as List?;
+      var rawEls = json['elements'] as List?;
+      if (rawEls == null || rawEls.isEmpty) {
+        // 容错：模型偶发把元素数组放到别的键下；扫描第一个非空数组。
+        for (final value in json.values) {
+          if (value is List && value.isNotEmpty) {
+            rawEls = value;
+            break;
+          }
+        }
+      }
       if (rawEls == null || rawEls.isEmpty) {
         debugPrint('[GeometryDiagram] elements is null or empty: ${json.keys}');
         return null;

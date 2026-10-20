@@ -7,10 +7,14 @@ class GeometryDiagramWidget extends StatefulWidget {
     super.key,
     required this.diagramData,
     this.showAuxiliaryButton = true,
+    this.plain = false,
   });
 
   final Map<String, dynamic> diagramData;
   final bool showAuxiliaryButton;
+
+  /// 打印/导出模式：去掉卡片边框与底色，仅保留图形本身。
+  final bool plain;
 
   @override
   State<GeometryDiagramWidget> createState() => _GeometryDiagramWidgetState();
@@ -74,13 +78,15 @@ class _GeometryDiagramWidgetState extends State<GeometryDiagramWidget>
     return Column(
       children: [
         Container(
-          decoration: BoxDecoration(
-            color: colorScheme.surface,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: colorScheme.outlineVariant,
-            ),
-          ),
+          decoration: widget.plain
+              ? null
+              : BoxDecoration(
+                  color: colorScheme.surface,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: colorScheme.outlineVariant,
+                  ),
+                ),
           child: AspectRatio(
             aspectRatio: 1.4,
             child: AnimatedBuilder(

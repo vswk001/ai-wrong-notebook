@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import 'package:smart_wrong_notebook/src/app/providers.dart';
+import 'package:smart_wrong_notebook/src/data/services/exam_content_rasterizer.dart';
 import 'package:smart_wrong_notebook/src/data/services/exam_paper_pdf_service.dart';
 import 'package:smart_wrong_notebook/src/domain/models/generated_exercise.dart';
 import 'package:smart_wrong_notebook/src/domain/models/question_record.dart';
@@ -204,7 +205,7 @@ class _ExamPaperScreenState extends ConsumerState<ExamPaperScreen> {
                       <Widget>[
                         _choiceRow(
                           '错题原题',
-                          '整题以拍照原图形式排版（不含文字转写）',
+                          '以首次解析的结构化文本排版，公式与图形按原样重绘（不嵌入拍照原图）',
                           source == _ExamSource.original,
                           () => setSheetState(() => source = _ExamSource.original),
                         ),
@@ -354,7 +355,9 @@ class _ExamPaperScreenState extends ConsumerState<ExamPaperScreen> {
 
     try {
       _showProgressDialog(overlay, '准备生成…');
-      final entries = <ExamPaperEntry>[];
+      final stems = <String>[];
+      final answers = <String?>[];
+      final explanations = <String?>[];
       String? warning;
 
       if (source == _ExamSource.variant) {
@@ -370,18 +373,14 @@ class _ExamPaperScreenState extends ConsumerState<ExamPaperScreen> {
           }
           if (exercises.isEmpty) {
             failedCount++;
-            entries.add(ExamPaperEntry(
-              stem: _stemOf(question),
-              answer: question.analysisResult?.finalAnswer,
-              explanation: null,
-            ));
+            stems.add(_stemOf(question));
+            answers.add(question.analysisResult?.finalAnswer);
+            explanations.add(null);
           } else {
             final exercise = exercises.first;
-            entries.add(ExamPaperEntry(
-              stem: exercise.question,
-              answer: exercise.answer,
-              explanation: exercise.explanation,
-            ));
+            stems.add(exercise.question);
+            answers.add(exercise.answer);
+            explanations.add(exercise.explanation);
           }
           done++;
           _updateProgressDialog(done, selected.length);
@@ -391,14 +390,81 @@ class _ExamPaperScreenState extends ConsumerState<ExamPaperScreen> {
         }
       } else {
         for (final question in selected) {
-          entries.add(ExamPaperEntry(
-            stem: _stemOf(question),
-            answer: question.analysisResult?.finalAnswer,
-            explanation: question.analysisResult?.finalAnswerDerivation,
-            imagePath: question.imagePath,
-          ));
+          stems.add(_stemOf(question));
+          answers.add(question.analysisResult?.finalAnswer);
+          explanations.add(question.analysisResult?.finalAnswerDerivation);
         }
       }
+
+      // 结构化文本 → 高保真位图块（公式/图形/表格），与首次解析一致。
+      var stemBlocks = <List<ExamRenderBlock>>[
+        for (var i = 0; i < stems.length; i++) const <ExamRenderBlock>[],
+      ];
+      var answerBlocks = stemBlocks;
+      var explanationBlocks = stemBlocks;
+      try {
+        final rasterizer = ExamContentRasterizer();
+        final widthPt = ExamPaperPdfService.contentWidthFor(paperSize);
+        final fontSize = ExamPaperPdfService.baseFontSizeFor(paperSize);
+        final renderTargets = <String>[
+          ...stems,
+          for (final answer in answers)
+            if (answer != null && answer.trim().isNotEmpty) answer,
+          for (final explanation in explanations)
+            if (explanation != null && explanation.trim().isNotEmpty)
+              explanation,
+        ];
+        var rendered = 0;
+        Future<List<List<ExamRenderBlock>>> renderPass(
+          List<String> contents,
+        ) {
+          final nonEmpty =
+              contents.where((c) => c.trim().isNotEmpty).length;
+          return rasterizer
+              .rasterizeAll(
+                overlay: overlay,
+                contents: contents,
+                widthPt: widthPt,
+                fontSize: fontSize,
+                onProgress: (done, total) {
+                  _progressNotifier.value =
+                      '正在渲染题目内容 ${rendered + done}/${renderTargets.length}…';
+                },
+              )
+              .whenComplete(() => rendered += nonEmpty);
+        }
+
+        stemBlocks = await renderPass(stems);
+        answerBlocks = await renderPass(<String>[
+          for (final answer in answers) answer ?? '',
+        ]);
+        explanationBlocks = await renderPass(<String>[
+          for (final explanation in explanations) explanation ?? '',
+        ]);
+        final fallbackCount = stems
+            .asMap()
+            .entries
+            .where((e) =>
+                e.value.trim().isNotEmpty && stemBlocks[e.key].isEmpty)
+            .length;
+        if (fallbackCount > 0) {
+          warning = '有 $fallbackCount 题内容渲染失败，已按纯文本排版。';
+        }
+      } catch (_) {
+        warning = '内容渲染失败，已按纯文本排版。';
+      }
+
+      final entries = <ExamPaperEntry>[
+        for (var i = 0; i < stems.length; i++)
+          ExamPaperEntry(
+            stem: stems[i],
+            answer: answers[i],
+            explanation: explanations[i],
+            stemBlocks: stemBlocks[i],
+            answerBlocks: answerBlocks[i],
+            explanationBlocks: explanationBlocks[i],
+          ),
+      ];
 
       _progressNotifier.value = '正在排版生成 PDF…';
       final pdfService = ExamPaperPdfService();
@@ -415,9 +481,8 @@ class _ExamPaperScreenState extends ConsumerState<ExamPaperScreen> {
       final file = File('${dir.path}/$safeTitle.pdf');
       await file.writeAsBytes(result.bytes, flush: true);
 
-      if (result.warning != null) {
-        scaffoldMessenger
-            .showSnackBar(SnackBar(content: Text(result.warning!)));
+      if (warning != null) {
+        scaffoldMessenger.showSnackBar(SnackBar(content: Text(warning)));
       }
       await Share.shareXFiles(
         <XFile>[XFile(file.path, mimeType: 'application/pdf')],
@@ -563,11 +628,6 @@ class _QuestionPickCard extends StatelessWidget {
                                 color: question.subject.color)),
                         if (question.analysisResult == null)
                           Text('未解析',
-                              style: TextStyle(
-                                  fontSize: 11.5,
-                                  color: colorScheme.onSurfaceVariant)),
-                        if (question.imagePath.isNotEmpty)
-                          Text('有图',
                               style: TextStyle(
                                   fontSize: 11.5,
                                   color: colorScheme.onSurfaceVariant)),

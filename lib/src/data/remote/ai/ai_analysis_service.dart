@@ -2275,6 +2275,7 @@ class AiAnalysisService {
 - 必须以图片内容为准，不要虚构缺失内容
 - extractedQuestionText 保留尽量忠实的识别结果
 - normalizedQuestionText 输出更适合展示、搜索和后续 AI 分析的规范文本
+- 【逐字一致——最高优先级】normalizedQuestionText 必须与 extractedQuestionText 逐字对应：只允许修正明显的 OCR 识别错误、整理换行与标点、把公式规范为 LaTeX；严禁改写、意译、概括、增删任何条件、数字、单位或选项。导出试卷时将直接用该文本替代原图，任何改写都会导致题目与原图不一致
 - 如果图片无法识别出有效题目，两个文本字段都返回空字符串
 - 如果内容包含 LaTeX，必须先生成合法 JSON：所有 LaTeX 反斜杠都写成 JSON 转义形式，例如 \\frac、\\times、\\(x\\)、\\[x\\]
 - 方程组或多行公式必须使用 KaTeX 兼容的 aligned 或 cases 环境，例如 \\begin{cases} x+y=5 \\\\ x-y=1 \\end{cases}，不要使用 \\newline
